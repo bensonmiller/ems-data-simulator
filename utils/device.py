@@ -58,8 +58,8 @@ class MonitoringDeviceConfig:
         self.manufacturer = manufacturer
 
         # Generate the appliance and device based on the type
-        dg = DeviceGroup(fridges)
-        self.appliance = dg.random_device(manufacturer=self.manufacturer)
+        dg_f = DeviceGroup(fridges)
+        self.appliance = dg_f.random_device() # random fridge
         self.device = self.appliance   # Assume that EMS devices have monitoring devices built-in
         if self.type == 'rtmd':
             dg = DeviceGroup(rtmds)

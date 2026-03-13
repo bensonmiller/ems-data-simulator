@@ -98,10 +98,54 @@ print(len(report.records))  # 3600/900 = 4
 
 ### Locust load testing
 
-The locustfile is configured for load testing against OpenFn endpoints:
+The `locustfile.py` integrates the simulator with [Locust](https://locust.io/) for load testing OpenFn endpoints. Each Locust user represents a single CCE device with its own identity (serial numbers, facility, power type) sending a pre-generated series of CCDX-formatted reports.
+
+#### How it works
+
+During startup (`on_start`), each virtual user:
+
+1. Creates a `BaseRtmDevice` with randomized device metadata
+2. Pre-generates a queue of sequential reports by calling `create_report()` in a loop with advancing timestamps
+3. Simulator state (TVC, compressor, battery SOC) carries over between reports, so the full series is physically continuous
+
+During the test, `post_packet()` pops the next report from the queue and POSTs it. When a user's queue is exhausted, the test stops. This decouples simulated time from wall-clock time — Locust controls how fast reports are sent, while the data itself represents coherent multi-day device telemetry.
+
+Load volume comes from spawning many Locust users (each a distinct device), not from time compression.
+
+#### Configuration
+
+| Environment variable | Default | Description |
+|---|---|---|
+| `TARGET_HOST` | `http://localhost:8001` | Base URL for the OpenFn endpoint |
+| `OPENFN_WORKFLOW_ID` | _(required)_ | Workflow ID appended to the POST path |
+| `NUM_REPORTS` | `168` | Number of sequential reports to pre-generate per device. At a 1-hour upload interval, 168 = one week of data |
+| `SIM_START` | `2024-06-15T00:00:00` | Simulated start date (ISO 8601). Each user adds random jitter to avoid identical timestamps |
+| `START_JITTER_S` | `3600` | Maximum random offset (seconds) added to each user's start time |
+
+The device mix is controlled by the `weight` attribute on `RtmdDevice` and `EmsDevice` in `locustfile.py` (both default to 1, producing a 50/50 split).
+
+Each device's `upload_interval` and `sample_interval` are randomized by `MonitoringDeviceConfig` — typical values are 1–8 hour upload intervals with 10–15 minute sample intervals.
+
+#### Examples
+
+Run 100 virtual devices against a local endpoint, ramping up 5 users/second:
 
 ```bash
-locust -f locustfile.py --headless -u 10 -r 1 -t 60s
+export OPENFN_WORKFLOW_ID="your-workflow-id"
+locust -f locustfile.py --headless -u 100 -r 5
+```
+
+Generate 30 days of data per device instead of the default 7:
+
+```bash
+NUM_REPORTS=720 locust -f locustfile.py --headless -u 50 -r 10
+```
+
+Target a remote endpoint with a custom start date:
+
+```bash
+TARGET_HOST=https://app.openfn.org SIM_START=2025-01-01T00:00:00 \
+  locust -f locustfile.py --headless -u 500 -r 20
 ```
 
 ## Injecting anomalies
