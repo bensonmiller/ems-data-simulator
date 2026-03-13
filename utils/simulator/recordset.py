@@ -30,6 +30,7 @@ class SimulatorState:
     cumulative_powered_s: float = 0.0
     rng_state: Optional[tuple] = None
     icebank_soc: float = 1.0  # Icebank state of charge (0.0–1.0)
+    tvc_contents: Optional[float] = None  # Bulk contents temp (two-node model)
     # Internal state for sub-models (not user-facing)
     _power_in_outage: bool = False
     _power_outage_end: Optional[dt.datetime] = None
@@ -120,6 +121,7 @@ class SimulatedRecordSet:
             tvc=state.tvc,
             compressor_on=state.compressor_on,
             icebank_soc=state.icebank_soc,
+            tvc_contents=state.tvc_contents,
         )
 
         records = []
@@ -203,6 +205,7 @@ class SimulatedRecordSet:
             cumulative_powered_s=power_state.cumulative_powered_s,
             rng_state=rng.getstate(),
             icebank_soc=thermal_state.icebank_soc,
+            tvc_contents=thermal_state.tvc_contents,
             _power_in_outage=power_state.in_outage,
             _power_outage_end=power_state.outage_end,
             _alarm_last_power_loss=alarm_gen._last_power_loss,

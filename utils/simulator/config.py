@@ -39,6 +39,16 @@ class ThermalConfig:
     C: float = 15000.0
     Q_compressor: float = 300.0
     R_door: float = 0.15
+    C_air: float = 0.0                 # Thermal capacitance of the chamber air + near-surface
+                                        # layer (J/K).  When > 0, the model splits the chamber
+                                        # into two coupled nodes: "air" (what the TVC probe reads)
+                                        # and "contents" (vaccine thermal mass, C - C_air).
+                                        # Door heat enters the air node, so TVC spikes on door
+                                        # open then recovers as air re-equilibrates with cold
+                                        # contents.  0 = legacy single-node model (C only).
+    R_air_contents: float = 0.4         # Thermal resistance between chamber air and vaccine
+                                        # contents (K/W).  Controls how fast TVC recovers after
+                                        # a door event.  Lower = faster recovery.
     T_setpoint_low: float = 2.0
     T_setpoint_high: float = 8.0
     initial_tvc: float = 5.0
@@ -51,8 +61,8 @@ class ThermalConfig:
     # (freezing).  See the holdover calculator paper for equations.
     #
     # C_ice = 334 kJ/kg;  E_ice_bank = M_ice * C_ice
-    # E_new = E_old + E_compressor - E_leakage - E_door
-    # E_leakage = C_leakage * (T_external - T_internal) * dt
+    # E_new = E_old + E_compressor - E_leakage
+    # E_leakage = (TVC - T_ice) / R_icebank * dt
     icebank_capacity_j: float = 0.0        # Total latent heat capacity (J). 0 = no icebank.
     icebank_initial_soc: float = 1.0       # Initial state of charge (0.0–1.0, 1.0 = fully frozen).
     R_icebank: float = 0.08                # Thermal resistance between chamber air and icebank (K/W).
@@ -231,6 +241,8 @@ def default_config(power_type: str = "mains", latitude: Optional[float] = None) 
             C=50000.0,           # Chamber air + vaccine contents (J/K)
             Q_compressor=34.0,   # Effective ice-building rate (W) — 10 h solar refills daily melt
             R_door=0.24,         # Chest-style SDD door conductance (K/W)
+            C_air=5000.0,        # Air + near-surface (chest: less air exchange) (J/K)
+            R_air_contents=0.6,  # Chest: slower air-contents coupling (cold air pooled)
             T_setpoint_low=2.0,
             T_setpoint_high=5.0,
             initial_tvc=4.0,
@@ -248,6 +260,8 @@ def default_config(power_type: str = "mains", latitude: Optional[float] = None) 
             C=50000.0,           # Chamber air + vaccine contents (J/K)
             Q_compressor=50.0,   # Effective ice-building rate (W) — continuous power
             R_door=0.15,         # Cabinet-style door conductance (K/W)
+            C_air=3000.0,        # Air + near-surface (upright: rapid air exchange) (J/K)
+            R_air_contents=0.4,  # Upright: faster air-contents coupling
             T_setpoint_low=2.0,
             T_setpoint_high=8.0,
             initial_tvc=5.0,
