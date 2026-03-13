@@ -175,9 +175,9 @@ class ThermalModel:
                 tvc += dT * dt_step
 
                 # Icebank energy balance:
-                #   Melting (positive) = heat from chamber to icebank
+                #   Melting (positive) = heat from chamber to icebank + door infiltration
                 #   Freezing (negative) = compressor cooling
-                icebank_heat_w = q_to_icebank - (q_comp if compressor_on else 0.0)
+                icebank_heat_w = q_to_icebank + q_door - (q_comp if compressor_on else 0.0)
                 icebank_soc -= (icebank_heat_w * dt_step) / cfg.icebank_capacity_j
                 icebank_soc = max(0.0, min(1.0, icebank_soc))
             else:
