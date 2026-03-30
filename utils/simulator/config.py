@@ -155,13 +155,16 @@ class FaultConfig:
     fault_type: Type of fault to inject (or NONE).
     fault_start_offset_s: Seconds from simulation start until fault begins.
     fault_duration_s: Duration of the fault in seconds (0 = permanent).
-    refrigerant_leak_rate: For REFRIGERANT_LEAK, fraction of Q_compressor
-        lost per hour (e.g., 0.02 = 2% per hour).
+    refrigerant_leak_rate: For REFRIGERANT_LEAK, exponential decay constant
+        (1/hours).  Cooling capacity = exp(-rate * elapsed_hours).
+        Default 0.002 gives ~2-month onset-to-failure timeline matching
+        real-world thermosyphon leaks (e.g., unit 2807-CB2A: 62-day
+        degradation).  Higher values = faster leak (0.01 ≈ 2 weeks).
     """
     fault_type: FaultType = FaultType.NONE
     fault_start_offset_s: float = 0.0
     fault_duration_s: float = 0.0
-    refrigerant_leak_rate: float = 0.02
+    refrigerant_leak_rate: float = 0.002
 
 
 @dataclass

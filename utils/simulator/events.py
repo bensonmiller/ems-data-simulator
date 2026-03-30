@@ -2,6 +2,7 @@
 Event generators for door openings, fault injection, and alarm derivation.
 """
 
+import math
 import random
 import datetime as dt
 from dataclasses import dataclass
@@ -125,9 +126,23 @@ class FaultInjector:
         elif fault == FaultType.COMPRESSOR_FAILURE:
             return FaultEffects(compressor_available=False)
         elif fault == FaultType.REFRIGERANT_LEAK:
-            # Gradually reduce cooling capacity over time
+            # Exponential decay of cooling capacity.
+            #
+            # Real-world thermosyphon leaks (from InfluxDB field data) show:
+            #   - Gradual loss over weeks/months, not hours
+            #   - Two-phase pattern: degraded-but-stable, then rapid failure
+            #     once icebank depletes (the icebank dynamics handle phase 2)
+            #   - Exponential fits physics: leak rate ∝ remaining refrigerant
+            #     pressure, which decreases as gas escapes
+            #
+            # Reference: unit 2807-CB2A-0A00-00C8 (issue #616): onset March 5
+            # 2021, degraded 60 days, failure May 6 once icebank depleted.
             elapsed_h = (timestamp - self.fault_start).total_seconds() / 3600.0
-            multiplier = max(0.0, 1.0 - self.config.refrigerant_leak_rate * elapsed_h)
+            multiplier = math.exp(-self.config.refrigerant_leak_rate * elapsed_h)
+            # Below 5% capacity, the syphon can't sustain two-phase flow
+            # and effectively disconnects — no cooling reaches the VCC.
+            if multiplier < 0.05:
+                multiplier = 0.0
             return FaultEffects(q_compressor_multiplier=multiplier)
 
         return FaultEffects()

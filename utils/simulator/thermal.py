@@ -260,12 +260,39 @@ class ThermalModel:
 
                 tvc += dT * dt_step
 
+        # Derive TRBCM (rollbond temperature) for diagnostic output.
+        #
+        # The rollbond is the evaporator surface inside the vaccine chamber,
+        # cooled by the thermosyphon from the compressor.  When the syphon
+        # is healthy, TRBCM sits near the icebank temperature (~0°C);
+        # when degraded, TRBCM rises toward TVC air temperature.
+        #
+        # Calibrated from field data (healthy: TRBCM ≈ 0.3–0.5°C at
+        # TVC 4°C; degraded syphon: TRBCM ≈ 1.5°C at TVC 3°C).
+        if has_icebank and icebank_soc > 0:
+            T_ice_surface = 0.0
+            # q_compressor_override proxies syphon health: lower q → warmer rollbond
+            if q_comp > 0:
+                syphon_eff = min(1.0, q_comp / cfg.Q_compressor) if cfg.Q_compressor > 0 else 0.0
+            else:
+                syphon_eff = 0.0
+            # Healthy (eff=1): TRBCM ≈ T_ice + 0.1 * (TVC - T_ice) ≈ 0.4°C
+            # Failed  (eff=0): TRBCM ≈ T_ice + 0.5 * (TVC - T_ice) — equilibrating between icebank and air
+            alpha = 0.1 + 0.4 * (1.0 - syphon_eff)
+            trbcm = T_ice_surface + alpha * (tvc - T_ice_surface)
+        elif has_icebank:
+            # Icebank depleted: rollbond approaches VCC temperature
+            trbcm = tvc - 0.3
+        else:
+            trbcm = None
+
         record = {
             'TVC': round(tvc, 1),
             'TAMB': round(tamb, 1),
             'CMPR': int(cmpr_seconds),
             'DORV': int(dorv_seconds),
             'ICESOC': round(icebank_soc, 4) if has_icebank else None,
+            'TRBCM': round(trbcm, 1) if trbcm is not None else None,
         }
 
         new_state = ThermalState(

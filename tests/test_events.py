@@ -206,36 +206,74 @@ class TestFaultEffects:
             fault_type=FaultType.REFRIGERANT_LEAK,
             fault_start_offset_s=0.0,
             fault_duration_s=7200.0,
-            refrigerant_leak_rate=0.02,
+            refrigerant_leak_rate=0.002,
         )
         inj = FaultInjector(cfg, SIM_START)
         # Right at the start of the fault (1 second in) -> barely any leak
         fx = inj.get_fault_effects(SIM_START + dt.timedelta(seconds=1))
         assert 0.99 < fx.q_compressor_multiplier <= 1.0
 
-    def test_refrigerant_leak_progresses(self):
-        cfg = FaultConfig(
-            fault_type=FaultType.REFRIGERANT_LEAK,
-            fault_start_offset_s=0.0,
-            fault_duration_s=360000.0,
-            refrigerant_leak_rate=0.10,  # 10% per hour
-        )
-        inj = FaultInjector(cfg, SIM_START)
-        # After 5 hours: multiplier = 1.0 - 0.10 * 5 = 0.5
-        fx = inj.get_fault_effects(SIM_START + dt.timedelta(hours=5))
-        assert abs(fx.q_compressor_multiplier - 0.5) < 0.01
-
-    def test_refrigerant_leak_clamped_at_zero(self):
+    def test_refrigerant_leak_progresses_exponentially(self):
+        """Exponential decay: multiplier = exp(-rate * elapsed_h)."""
+        import math
         cfg = FaultConfig(
             fault_type=FaultType.REFRIGERANT_LEAK,
             fault_start_offset_s=0.0,
             fault_duration_s=0,  # permanent
-            refrigerant_leak_rate=0.50,  # 50% per hour
+            refrigerant_leak_rate=0.10,
         )
         inj = FaultInjector(cfg, SIM_START)
-        # After 10 hours: 1.0 - 0.5*10 = -4.0 -> clamped to 0.0
-        fx = inj.get_fault_effects(SIM_START + dt.timedelta(hours=10))
+        # After 5 hours: multiplier = exp(-0.10 * 5) = exp(-0.5) ≈ 0.6065
+        fx = inj.get_fault_effects(SIM_START + dt.timedelta(hours=5))
+        expected = math.exp(-0.10 * 5)
+        assert abs(fx.q_compressor_multiplier - expected) < 0.001
+
+    def test_refrigerant_leak_clamps_to_zero(self):
+        """Below 5% capacity, syphon disconnects → multiplier clamped to 0.0."""
+        cfg = FaultConfig(
+            fault_type=FaultType.REFRIGERANT_LEAK,
+            fault_start_offset_s=0.0,
+            fault_duration_s=0,  # permanent
+            refrigerant_leak_rate=0.50,
+        )
+        inj = FaultInjector(cfg, SIM_START)
+        # After 20 hours: exp(-0.5*20) = exp(-10) ≈ 4.5e-5 → clamped to 0.0
+        fx = inj.get_fault_effects(SIM_START + dt.timedelta(hours=20))
         assert fx.q_compressor_multiplier == 0.0
+
+    def test_refrigerant_leak_above_threshold_not_clamped(self):
+        """Just above 5% threshold, multiplier is not clamped."""
+        import math
+        cfg = FaultConfig(
+            fault_type=FaultType.REFRIGERANT_LEAK,
+            fault_start_offset_s=0.0,
+            fault_duration_s=0,
+            refrigerant_leak_rate=0.002,
+        )
+        inj = FaultInjector(cfg, SIM_START)
+        # After 30 days: exp(-0.002 * 720) ≈ 0.237 — well above threshold
+        fx = inj.get_fault_effects(SIM_START + dt.timedelta(days=30))
+        assert fx.q_compressor_multiplier > 0.05
+
+    def test_refrigerant_leak_realistic_timeline(self):
+        """Default rate 0.002 gives ~2-month failure timeline matching field data."""
+        import math
+        cfg = FaultConfig(
+            fault_type=FaultType.REFRIGERANT_LEAK,
+            fault_start_offset_s=0.0,
+            fault_duration_s=0,
+            refrigerant_leak_rate=0.002,  # default
+        )
+        inj = FaultInjector(cfg, SIM_START)
+        # After 1 week: ~97% capacity remaining
+        fx = inj.get_fault_effects(SIM_START + dt.timedelta(weeks=1))
+        assert 0.70 < fx.q_compressor_multiplier < 0.75
+        # After 1 month: ~23% capacity
+        fx = inj.get_fault_effects(SIM_START + dt.timedelta(days=30))
+        assert 0.20 < fx.q_compressor_multiplier < 0.27
+        # After 2 months: ~5% capacity (effectively dead)
+        fx = inj.get_fault_effects(SIM_START + dt.timedelta(days=60))
+        assert fx.q_compressor_multiplier < 0.07
 
 
 # ===================================================================
