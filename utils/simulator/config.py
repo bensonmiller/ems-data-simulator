@@ -147,6 +147,71 @@ class EventConfig:
     working_hours: Tuple[int, int] = (8, 17)
     off_hours_rate_fraction: float = 0.05
 
+    # --- Inattentive door use presets ---
+    #
+    # Calibrated from fleet-wide InfluxDB analysis of 1,225 fridges
+    # (Jan 2021 – Dec 2022).  Fleet medians: 1.95 opens/day, 43 secs/day.
+    #
+    # Three archetypes emerged from Door Abuse Score (DAS) ranking:
+    #   - few_but_long:    Low frequency, very long openings (avg >2 min).
+    #                      Matches top-DAS fridges like 2939741665037910172
+    #                      (DAS=6.8, 2.2 opens/day, 113s avg duration).
+    #   - frequent_short:  High frequency, normal duration (~25s).
+    #                      Matches fridges like 2919598603410341962
+    #                      (DAS=4.2, 3.9 opens/day, 25s avg duration).
+    #   - busy_facility:   Very high frequency, extended working hours.
+    #                      Matches extreme cases like FRIDGEID 2911872004472701155
+    #                      (DAS=17.1, 15.9 opens/day, 24s avg, 06:00–20:00 hours).
+    #
+    # These compose freely with any FaultConfig — e.g., inattentive door
+    # use during a refrigerant leak or power outage.
+
+    @classmethod
+    def few_but_long(cls) -> 'EventConfig':
+        """Staff leave the door open for extended periods (2–5+ minutes).
+
+        Produces ~3 opens/day with high average duration (~180s).
+        Characteristic signature: large TVC spikes even with low open count.
+        """
+        return cls(
+            door_rate_per_hour=0.3,
+            door_mean_duration_s=180.0,
+            door_std_duration_s=120.0,
+            working_hours=(8, 17),
+            off_hours_rate_fraction=0.1,
+        )
+
+    @classmethod
+    def frequent_short(cls) -> 'EventConfig':
+        """Staff open the door frequently but briefly (~25s each).
+
+        Produces ~10 opens/day with normal-length openings.
+        Characteristic signature: many small TVC perturbations that
+        prevent the chamber from settling to its equilibrium temperature.
+        """
+        return cls(
+            door_rate_per_hour=1.2,
+            door_mean_duration_s=25.0,
+            door_std_duration_s=10.0,
+            working_hours=(8, 17),
+            off_hours_rate_fraction=0.05,
+        )
+
+    @classmethod
+    def busy_facility(cls) -> 'EventConfig':
+        """High-traffic facility with extended operating hours (06:00–20:00).
+
+        Produces ~16+ opens/day.  Models immunization campaign days,
+        busy urban clinics, or facilities with poor door discipline.
+        """
+        return cls(
+            door_rate_per_hour=1.2,
+            door_mean_duration_s=25.0,
+            door_std_duration_s=10.0,
+            working_hours=(6, 20),
+            off_hours_rate_fraction=0.15,
+        )
+
 
 @dataclass
 class FaultConfig:

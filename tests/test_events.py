@@ -374,3 +374,94 @@ class TestHoldTracking:
         t4 = t3 + dt.timedelta(seconds=60)
         result = ag.derive_alarms(tvc=5.0, power_available=False, timestamp=t4)
         assert result['HOLD'] == 60.0
+
+
+# ===================================================================
+# 7. EventConfig door use presets
+# ===================================================================
+
+def _simulate_daily_door_stats(config, n_days=30, seed=42):
+    """Run door generation for n_days and return (opens_per_day, secs_per_day, avg_dur)."""
+    rng = _make_rng(seed)
+    gen = DoorEventGenerator(config, rng)
+    interval_s = 900.0
+    intervals_per_day = int(86400 / interval_s)
+    base = dt.datetime(2025, 1, 1, 0, 0, 0)
+
+    total_opens = 0
+    total_secs = 0.0
+    for day in range(n_days):
+        for i in range(intervals_per_day):
+            ts = base + dt.timedelta(days=day, seconds=i * interval_s)
+            events = gen.get_door_events(ts, interval_s)
+            total_opens += len(events)
+            total_secs += sum(e.duration_s for e in events)
+
+    opens_pd = total_opens / n_days
+    secs_pd = total_secs / n_days
+    avg_dur = total_secs / total_opens if total_opens > 0 else 0
+    return opens_pd, secs_pd, avg_dur
+
+
+class TestEventConfigPresets:
+    """EventConfig presets produce door statistics matching field data archetypes."""
+
+    def test_few_but_long_opens_per_day(self):
+        config = EventConfig.few_but_long()
+        opens_pd, secs_pd, avg_dur = _simulate_daily_door_stats(config)
+        # Expect ~3 opens/day (field ref: 2.2)
+        assert 1 <= opens_pd <= 8
+
+    def test_few_but_long_high_avg_duration(self):
+        config = EventConfig.few_but_long()
+        opens_pd, secs_pd, avg_dur = _simulate_daily_door_stats(config)
+        # Avg duration should be high (>60s), matching field ref of 113s
+        assert avg_dur > 60
+
+    def test_few_but_long_high_secs_per_day(self):
+        config = EventConfig.few_but_long()
+        opens_pd, secs_pd, avg_dur = _simulate_daily_door_stats(config)
+        # Secs/day should be elevated (field ref: 206)
+        assert secs_pd > 80
+
+    def test_frequent_short_opens_per_day(self):
+        config = EventConfig.frequent_short()
+        opens_pd, secs_pd, avg_dur = _simulate_daily_door_stats(config)
+        # Expect ~10 opens/day (field ref: 3.9–16)
+        assert 5 <= opens_pd <= 20
+
+    def test_frequent_short_low_avg_duration(self):
+        config = EventConfig.frequent_short()
+        opens_pd, secs_pd, avg_dur = _simulate_daily_door_stats(config)
+        # Avg duration should be short (<45s)
+        assert avg_dur < 45
+
+    def test_busy_facility_high_opens(self):
+        config = EventConfig.busy_facility()
+        opens_pd, secs_pd, avg_dur = _simulate_daily_door_stats(config)
+        # Expect ~16+ opens/day (field ref: 15.9)
+        assert opens_pd >= 12
+
+    def test_busy_facility_extended_hours(self):
+        config = EventConfig.busy_facility()
+        assert config.working_hours == (6, 20)
+
+    def test_busy_facility_more_opens_than_frequent_short(self):
+        """Busy facility should produce more opens due to extended hours."""
+        busy_opens, _, _ = _simulate_daily_door_stats(EventConfig.busy_facility())
+        freq_opens, _, _ = _simulate_daily_door_stats(EventConfig.frequent_short())
+        assert busy_opens > freq_opens
+
+    def test_presets_compose_with_fault_config(self):
+        """Presets work as drop-in EventConfig in a full SimulationConfig."""
+        from utils.simulator.config import SimulationConfig, FaultConfig, FaultType
+        config = SimulationConfig(
+            events=EventConfig.few_but_long(),
+            fault=FaultConfig(
+                fault_type=FaultType.POWER_OUTAGE,
+                fault_start_offset_s=3600,
+                fault_duration_s=7200,
+            ),
+        )
+        assert config.events.door_rate_per_hour == 0.3
+        assert config.fault.fault_type == FaultType.POWER_OUTAGE

@@ -196,6 +196,45 @@ config.fault.fault_duration_s = 0                # permanent
 config.fault.refrigerant_leak_rate = 0.02        # 2% capacity loss per hour
 ```
 
+### Inattentive door use
+
+Models operational door abuse by health facility staff — not a hardware fault, but a behavioral pattern that causes temperature excursions. Three presets are available via `EventConfig` factory methods, calibrated from fleet-wide analysis of 1,225 fridges (Jan 2021 – Dec 2022):
+
+**Few but long** — staff leave the door open for extended periods (2–5+ minutes). Produces ~3 opens/day with large TVC spikes up to 13°C, triggering HEAT alarms even with a working compressor:
+
+```python
+from utils.simulator.config import EventConfig, default_config
+
+config = default_config("mains", latitude=12.0)
+config.events = EventConfig.few_but_long()
+```
+
+**Frequent short** — staff open the door frequently but briefly (~25s each). Produces ~10 opens/day with many small TVC perturbations that prevent the chamber from settling:
+
+```python
+config.events = EventConfig.frequent_short()
+```
+
+**Busy facility** — high-traffic facility with extended operating hours (06:00–20:00). Produces ~16+ opens/day, modeling immunization campaign days or busy urban clinics:
+
+```python
+config.events = EventConfig.busy_facility()
+```
+
+Because door behavior is configured through `EventConfig` (not `FaultConfig`), it composes freely with any fault type. For example, inattentive door use during an extended power outage:
+
+```python
+from utils.simulator.config import EventConfig, FaultConfig, FaultType, default_config
+
+config = default_config("mains", latitude=12.0)
+config.events = EventConfig.few_but_long()
+config.fault = FaultConfig(
+    fault_type=FaultType.POWER_OUTAGE,
+    fault_start_offset_s=3 * 86400,   # power fails on day 3
+    fault_duration_s=24 * 3600,        # lasts 24 hours
+)
+```
+
 ### Combining faults with normal variation
 
 The stochastic elements (door openings, ambient noise, mains outages) run independently of fault injection. A compressor failure during a hot afternoon with a door opening produces a compound event that looks realistic.
