@@ -36,6 +36,8 @@ class SimulatorState:
     _power_outage_end: Optional[dt.datetime] = None
     _alarm_last_power_loss: Optional[dt.datetime] = None
     _alarm_power_was_available: bool = True
+    _alarm_heat_excursion_start: Optional[dt.datetime] = None
+    _alarm_frze_excursion_start: Optional[dt.datetime] = None
 
 
 class SimulatedRecordSet:
@@ -101,6 +103,8 @@ class SimulatedRecordSet:
         # Restore alarm generator state
         alarm_gen._last_power_loss = state._alarm_last_power_loss
         alarm_gen._power_was_available = state._alarm_power_was_available
+        alarm_gen._heat_excursion_start = state._alarm_heat_excursion_start
+        alarm_gen._frze_excursion_start = state._alarm_frze_excursion_start
 
         # Build power model
         power_state = PowerState(
@@ -210,6 +214,8 @@ class SimulatedRecordSet:
             _power_outage_end=power_state.outage_end,
             _alarm_last_power_loss=alarm_gen._last_power_loss,
             _alarm_power_was_available=alarm_gen._power_was_available,
+            _alarm_heat_excursion_start=alarm_gen._heat_excursion_start,
+            _alarm_frze_excursion_start=alarm_gen._frze_excursion_start,
         )
 
         return cls(records, new_state, config.power.power_type)

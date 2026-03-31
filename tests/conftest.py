@@ -22,8 +22,8 @@ def rtmd_record(time=datetime.now(pytz.utc)):
     
     if tvc > 10:
         alrm = "HEAT"
-    elif tvc < 2:
-        alrm = "FREEZE"
+    elif tvc <= -0.5:
+        alrm = "FRZE"
 
     if random() < 0.1:
         eerr = gib.generate_word()[0:5]

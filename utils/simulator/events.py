@@ -149,12 +149,28 @@ class FaultInjector:
 
 
 class AlarmGenerator:
-    """Derives alarm fields from simulation state."""
+    """Derives alarm fields from simulation state.
+
+    HEAT and FRZE alarms follow WHO PQS rules:
+    - HEAT: triggered after 10 continuous hours with TVC > +8°C.
+    - FRZE: triggered after 60 continuous minutes with TVC <= -0.5°C.
+    Once triggered, the alarm code is recorded each interval until the
+    excursion ends (TVC returns to normal range).  The excursion timer
+    resets when the temperature recovers, so the next alarm requires a
+    full new excursion of the same duration.
+    """
+
+    # Duration thresholds (seconds)
+    HEAT_THRESHOLD_S = 10 * 3600   # 10 hours
+    FRZE_THRESHOLD_S = 60 * 60     # 60 minutes
 
     def __init__(self, rng: random.Random):
         self.rng = rng
         self._last_power_loss: Optional[dt.datetime] = None
         self._power_was_available: bool = True
+        # Continuous excursion tracking
+        self._heat_excursion_start: Optional[dt.datetime] = None
+        self._frze_excursion_start: Optional[dt.datetime] = None
 
     def derive_alarms(
         self,
@@ -179,12 +195,28 @@ class AlarmGenerator:
             self._last_power_loss = None
         self._power_was_available = power_available
 
-        # ALRM
+        # ALRM — WHO continuous-excursion rules
         alrm = None
+
+        # HEAT: continuous TVC > 8.0°C for 10 hours
         if tvc > 8.0:
-            alrm = "HEAT"
-        elif tvc < 2.0:
-            alrm = "FREEZE"
+            if self._heat_excursion_start is None:
+                self._heat_excursion_start = timestamp
+            elapsed = (timestamp - self._heat_excursion_start).total_seconds()
+            if elapsed >= self.HEAT_THRESHOLD_S:
+                alrm = "HEAT"
+        else:
+            self._heat_excursion_start = None
+
+        # FRZE: continuous TVC <= -0.5°C for 60 minutes
+        if tvc <= -0.5:
+            if self._frze_excursion_start is None:
+                self._frze_excursion_start = timestamp
+            elapsed = (timestamp - self._frze_excursion_start).total_seconds()
+            if elapsed >= self.FRZE_THRESHOLD_S:
+                alrm = "FRZE"
+        else:
+            self._frze_excursion_start = None
 
         # HOLD: seconds since power loss (holdover time)
         hold = None

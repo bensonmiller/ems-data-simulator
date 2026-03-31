@@ -281,33 +281,147 @@ class TestFaultEffects:
 # ===================================================================
 
 class TestAlarmGenerator:
-    """AlarmGenerator derives correct ALRM values from TVC."""
+    """AlarmGenerator derives HEAT/FRZE alarms per WHO continuous-excursion rules.
 
-    def test_heat_alarm_when_tvc_above_8(self):
+    HEAT: TVC > 8.0°C continuously for 10 hours before alarm triggers.
+    FRZE: TVC <= -0.5°C continuously for 60 minutes before alarm triggers.
+    Alarms clear when the excursion ends; timer resets for the next event.
+    """
+
+    # -- HEAT alarm ----------------------------------------------------------
+
+    def test_no_heat_alarm_before_10_hours(self):
+        """TVC > 8 for less than 10h should NOT produce a HEAT alarm."""
         ag = AlarmGenerator(_make_rng(seed=1))
-        result = ag.derive_alarms(tvc=8.5, power_available=True, timestamp=SIM_START)
+        t = SIM_START
+        # 9 hours of excursion (< 10h threshold)
+        for i in range(36):  # 36 intervals * 15min = 9h
+            result = ag.derive_alarms(tvc=10.0, power_available=True, timestamp=t)
+            t += dt.timedelta(minutes=15)
+        assert result['ALRM'] is None
+
+    def test_heat_alarm_triggers_at_10_hours(self):
+        """HEAT alarm should appear once excursion reaches 10 continuous hours."""
+        ag = AlarmGenerator(_make_rng(seed=1))
+        t = SIM_START
+        # Feed 41 intervals (10h 15m) of continuous > 8°C
+        for i in range(41):
+            result = ag.derive_alarms(tvc=10.0, power_available=True, timestamp=t)
+            t += dt.timedelta(minutes=15)
         assert result['ALRM'] == 'HEAT'
 
-    def test_freeze_alarm_when_tvc_below_2(self):
+    def test_heat_alarm_clears_when_temp_recovers(self):
+        """HEAT alarm should stop as soon as TVC drops back to normal."""
         ag = AlarmGenerator(_make_rng(seed=1))
-        result = ag.derive_alarms(tvc=1.5, power_available=True, timestamp=SIM_START)
-        assert result['ALRM'] == 'FREEZE'
+        t = SIM_START
+        # Build up a HEAT alarm (11 hours)
+        for i in range(44):
+            ag.derive_alarms(tvc=10.0, power_available=True, timestamp=t)
+            t += dt.timedelta(minutes=15)
+        # Temperature recovers
+        result = ag.derive_alarms(tvc=5.0, power_available=True, timestamp=t)
+        assert result['ALRM'] is None
+
+    def test_heat_timer_resets_after_recovery(self):
+        """After temp recovers, a new excursion needs a full 10h again."""
+        ag = AlarmGenerator(_make_rng(seed=1))
+        t = SIM_START
+        # 11h excursion → HEAT alarm active
+        for i in range(44):
+            ag.derive_alarms(tvc=10.0, power_available=True, timestamp=t)
+            t += dt.timedelta(minutes=15)
+        # Recover
+        ag.derive_alarms(tvc=5.0, power_available=True, timestamp=t)
+        t += dt.timedelta(minutes=15)
+        # New excursion for only 9h → no alarm
+        for i in range(36):
+            result = ag.derive_alarms(tvc=9.0, power_available=True, timestamp=t)
+            t += dt.timedelta(minutes=15)
+        assert result['ALRM'] is None
+
+    def test_heat_interrupted_excursion_resets(self):
+        """A brief dip below 8°C resets the HEAT timer."""
+        ag = AlarmGenerator(_make_rng(seed=1))
+        t = SIM_START
+        # 9 hours hot
+        for i in range(36):
+            ag.derive_alarms(tvc=10.0, power_available=True, timestamp=t)
+            t += dt.timedelta(minutes=15)
+        # Brief recovery
+        ag.derive_alarms(tvc=7.0, power_available=True, timestamp=t)
+        t += dt.timedelta(minutes=15)
+        # Another 2 hours hot (total since reset = 2h, not 11h)
+        for i in range(8):
+            result = ag.derive_alarms(tvc=10.0, power_available=True, timestamp=t)
+            t += dt.timedelta(minutes=15)
+        assert result['ALRM'] is None
+
+    def test_heat_boundary_at_exactly_8(self):
+        """TVC == 8.0 should NOT start a HEAT excursion (threshold is >8)."""
+        ag = AlarmGenerator(_make_rng(seed=1))
+        t = SIM_START
+        for i in range(50):
+            result = ag.derive_alarms(tvc=8.0, power_available=True, timestamp=t)
+            t += dt.timedelta(minutes=15)
+        assert result['ALRM'] is None
+
+    # -- FRZE alarm ----------------------------------------------------------
+
+    def test_no_frze_alarm_before_60_minutes(self):
+        """TVC <= -0.5 for less than 60min should NOT produce a FRZE alarm."""
+        ag = AlarmGenerator(_make_rng(seed=1))
+        t = SIM_START
+        # 45 minutes (3 intervals)
+        for i in range(3):
+            result = ag.derive_alarms(tvc=-2.0, power_available=True, timestamp=t)
+            t += dt.timedelta(minutes=15)
+        assert result['ALRM'] is None
+
+    def test_frze_alarm_triggers_at_60_minutes(self):
+        """FRZE alarm should appear once excursion reaches 60 continuous minutes."""
+        ag = AlarmGenerator(_make_rng(seed=1))
+        t = SIM_START
+        # 5 intervals = 75 min (exceeds 60min threshold)
+        for i in range(5):
+            result = ag.derive_alarms(tvc=-2.0, power_available=True, timestamp=t)
+            t += dt.timedelta(minutes=15)
+        assert result['ALRM'] == 'FRZE'
+
+    def test_frze_alarm_clears_when_temp_recovers(self):
+        """FRZE alarm should stop when TVC rises above -0.5°C."""
+        ag = AlarmGenerator(_make_rng(seed=1))
+        t = SIM_START
+        # Build FRZE alarm (75 min)
+        for i in range(5):
+            ag.derive_alarms(tvc=-2.0, power_available=True, timestamp=t)
+            t += dt.timedelta(minutes=15)
+        # Recover
+        result = ag.derive_alarms(tvc=3.0, power_available=True, timestamp=t)
+        assert result['ALRM'] is None
+
+    def test_frze_boundary_at_minus_half(self):
+        """TVC == -0.5 IS a freeze excursion (threshold is <= -0.5)."""
+        ag = AlarmGenerator(_make_rng(seed=1))
+        t = SIM_START
+        for i in range(5):
+            result = ag.derive_alarms(tvc=-0.5, power_available=True, timestamp=t)
+            t += dt.timedelta(minutes=15)
+        assert result['ALRM'] == 'FRZE'
+
+    def test_frze_boundary_just_above(self):
+        """TVC just above -0.5 should NOT trigger FRZE."""
+        ag = AlarmGenerator(_make_rng(seed=1))
+        t = SIM_START
+        for i in range(10):
+            result = ag.derive_alarms(tvc=-0.4, power_available=True, timestamp=t)
+            t += dt.timedelta(minutes=15)
+        assert result['ALRM'] is None
+
+    # -- Normal range --------------------------------------------------------
 
     def test_no_alarm_in_normal_range(self):
         ag = AlarmGenerator(_make_rng(seed=1))
         result = ag.derive_alarms(tvc=5.0, power_available=True, timestamp=SIM_START)
-        assert result['ALRM'] is None
-
-    def test_boundary_at_exactly_8(self):
-        ag = AlarmGenerator(_make_rng(seed=1))
-        # TVC == 8.0 should NOT trigger HEAT (condition is >8)
-        result = ag.derive_alarms(tvc=8.0, power_available=True, timestamp=SIM_START)
-        assert result['ALRM'] is None
-
-    def test_boundary_at_exactly_2(self):
-        ag = AlarmGenerator(_make_rng(seed=1))
-        # TVC == 2.0 should NOT trigger FREEZE (condition is <2)
-        result = ag.derive_alarms(tvc=2.0, power_available=True, timestamp=SIM_START)
         assert result['ALRM'] is None
 
 
