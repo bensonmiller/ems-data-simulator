@@ -147,12 +147,18 @@ class EventConfig:
     working_hours: Tuple[int, int] = (8, 17)
     off_hours_rate_fraction: float = 0.05
 
-    # --- Inattentive door use presets ---
+    # --- Door behavior presets ---
     #
     # Calibrated from fleet-wide InfluxDB analysis of 1,225 fridges
     # (Jan 2021 – Dec 2022).  Fleet medians: 1.95 opens/day, 43 secs/day.
     #
-    # Three archetypes emerged from Door Abuse Score (DAS) ranking:
+    # Well-managed door use:
+    #   - bestpractice:    Matches fleet median — ~2 opens/day, ~40-60 secs/day.
+    #                      Represents facilities with good cold chain training.
+    #   - normal:          Moderate use — 4-8 short opens/day (~25s each).
+    #                      Represents a typical facility with adequate practices.
+    #
+    # Inattentive door use archetypes (from Door Abuse Score ranking):
     #   - few_but_long:    Low frequency, very long openings (avg >2 min).
     #                      Matches top-DAS fridges like 2939741665037910172
     #                      (DAS=6.8, 2.2 opens/day, 113s avg duration).
@@ -163,8 +169,37 @@ class EventConfig:
     #                      Matches extreme cases like FRIDGEID 2911872004472701155
     #                      (DAS=17.1, 15.9 opens/day, 24s avg, 06:00–20:00 hours).
     #
-    # These compose freely with any FaultConfig — e.g., inattentive door
-    # use during a refrigerant leak or power outage.
+    # All presets compose freely with any FaultConfig.
+
+    @classmethod
+    def bestpractice(cls) -> 'EventConfig':
+        """Well-managed facility with minimal, brief door openings.
+
+        Produces ~2 opens/day, ~40-60 secs/day total door-open time.
+        Matches the fleet median from 1,225 deployed fridges.
+        """
+        return cls(
+            door_rate_per_hour=0.25,
+            door_mean_duration_s=25.0,
+            door_std_duration_s=10.0,
+            working_hours=(8, 17),
+            off_hours_rate_fraction=0.05,
+        )
+
+    @classmethod
+    def normal(cls) -> 'EventConfig':
+        """Typical facility with adequate door practices.
+
+        Produces 4-8 short opens/day (~25s each).  Represents the
+        fleet p50–p75 range — not problematic, but not exemplary.
+        """
+        return cls(
+            door_rate_per_hour=0.7,
+            door_mean_duration_s=25.0,
+            door_std_duration_s=10.0,
+            working_hours=(8, 17),
+            off_hours_rate_fraction=0.05,
+        )
 
     @classmethod
     def few_but_long(cls) -> 'EventConfig':

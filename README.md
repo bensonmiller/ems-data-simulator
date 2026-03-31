@@ -196,29 +196,23 @@ config.fault.fault_duration_s = 0                # permanent
 config.fault.refrigerant_leak_rate = 0.02        # 2% capacity loss per hour
 ```
 
-### Inattentive door use
+### Door behavior presets
 
-Models operational door abuse by health facility staff — not a hardware fault, but a behavioral pattern that causes temperature excursions. Three presets are available via `EventConfig` factory methods, calibrated from fleet-wide analysis of 1,225 fridges (Jan 2021 – Dec 2022):
+`EventConfig` provides five named presets calibrated from fleet-wide analysis of 1,225 fridges (Jan 2021 – Dec 2022). These range from well-managed to abusive:
 
-**Few but long** — staff leave the door open for extended periods (2–5+ minutes). Produces ~3 opens/day with large TVC spikes up to 13°C, triggering HEAT alarms even with a working compressor:
+| Preset | opens/day | secs/day | TVC max | HEAT alarms | Pattern |
+|---|---|---|---|---|---|
+| `bestpractice()` | ~2 | ~60 | 7.1°C | 0 | Fleet median — trained staff |
+| `normal()` | ~6 | ~160 | 7.3°C | 0 | Typical facility, adequate practices |
+| `frequent_short()` | ~10 | ~290 | 7.3°C | 0 | Many brief opens, marginal |
+| `busy_facility()` | ~16 | ~440 | 8.0°C | 0 | High-traffic / campaign days |
+| `few_but_long()` | ~3 | ~530 | 13.1°C | 12 | Extended opens, causes excursions |
 
 ```python
 from utils.simulator.config import EventConfig, default_config
 
 config = default_config("mains", latitude=12.0)
-config.events = EventConfig.few_but_long()
-```
-
-**Frequent short** — staff open the door frequently but briefly (~25s each). Produces ~10 opens/day with many small TVC perturbations that prevent the chamber from settling:
-
-```python
-config.events = EventConfig.frequent_short()
-```
-
-**Busy facility** — high-traffic facility with extended operating hours (06:00–20:00). Produces ~16+ opens/day, modeling immunization campaign days or busy urban clinics:
-
-```python
-config.events = EventConfig.busy_facility()
+config.events = EventConfig.bestpractice()   # or normal(), few_but_long(), etc.
 ```
 
 Because door behavior is configured through `EventConfig` (not `FaultConfig`), it composes freely with any fault type. For example, inattentive door use during an extended power outage:

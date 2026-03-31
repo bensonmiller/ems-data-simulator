@@ -406,6 +406,34 @@ def _simulate_daily_door_stats(config, n_days=30, seed=42):
 class TestEventConfigPresets:
     """EventConfig presets produce door statistics matching field data archetypes."""
 
+    def test_bestpractice_opens_per_day(self):
+        config = EventConfig.bestpractice()
+        opens_pd, secs_pd, avg_dur = _simulate_daily_door_stats(config)
+        # Expect ~2 opens/day (fleet median: 1.95)
+        assert 1 <= opens_pd <= 5
+
+    def test_bestpractice_secs_per_day(self):
+        config = EventConfig.bestpractice()
+        opens_pd, secs_pd, avg_dur = _simulate_daily_door_stats(config)
+        # Expect ~40-60 secs/day (fleet median: 43)
+        assert 20 <= secs_pd <= 120
+
+    def test_normal_opens_per_day(self):
+        config = EventConfig.normal()
+        opens_pd, secs_pd, avg_dur = _simulate_daily_door_stats(config)
+        # Expect 4-8 opens/day
+        assert 3 <= opens_pd <= 12
+
+    def test_normal_short_durations(self):
+        config = EventConfig.normal()
+        opens_pd, secs_pd, avg_dur = _simulate_daily_door_stats(config)
+        assert avg_dur < 40
+
+    def test_normal_more_opens_than_bestpractice(self):
+        bp_opens, _, _ = _simulate_daily_door_stats(EventConfig.bestpractice())
+        norm_opens, _, _ = _simulate_daily_door_stats(EventConfig.normal())
+        assert norm_opens > bp_opens
+
     def test_few_but_long_opens_per_day(self):
         config = EventConfig.few_but_long()
         opens_pd, secs_pd, avg_dur = _simulate_daily_door_stats(config)
