@@ -38,6 +38,8 @@ class SimulatorState:
     _alarm_power_was_available: bool = True
     _alarm_heat_excursion_start: Optional[dt.datetime] = None
     _alarm_frze_excursion_start: Optional[dt.datetime] = None
+    _alarm_continuous_door_start: Optional[dt.datetime] = None
+    _alarm_door_open_at_prev_end: bool = False
 
 
 class SimulatedRecordSet:
@@ -105,6 +107,8 @@ class SimulatedRecordSet:
         alarm_gen._power_was_available = state._alarm_power_was_available
         alarm_gen._heat_excursion_start = state._alarm_heat_excursion_start
         alarm_gen._frze_excursion_start = state._alarm_frze_excursion_start
+        alarm_gen._continuous_door_start = state._alarm_continuous_door_start
+        alarm_gen._door_open_at_prev_end = state._alarm_door_open_at_prev_end
 
         # Build power model
         power_state = PowerState(
@@ -185,6 +189,8 @@ class SimulatedRecordSet:
                 tvc=thermal_state.tvc,
                 power_available=power_available,
                 timestamp=timestamp,
+                door_events=door_events,
+                interval_s=float(interval),
             )
 
             # 11. Battery/BLOG for mains (derive from a simple constant)
@@ -216,6 +222,8 @@ class SimulatedRecordSet:
             _alarm_power_was_available=alarm_gen._power_was_available,
             _alarm_heat_excursion_start=alarm_gen._heat_excursion_start,
             _alarm_frze_excursion_start=alarm_gen._frze_excursion_start,
+            _alarm_continuous_door_start=alarm_gen._continuous_door_start,
+            _alarm_door_open_at_prev_end=alarm_gen._door_open_at_prev_end,
         )
 
         return cls(records, new_state, config.power.power_type)

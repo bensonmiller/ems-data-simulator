@@ -426,6 +426,235 @@ class TestAlarmGenerator:
 
 
 # ===================================================================
+# 5b. DOOR alarm
+# ===================================================================
+
+class TestDoorAlarm:
+    """DOOR alarm triggers after > 5 minutes of continuous door opening."""
+
+    def test_no_alarm_short_door_event(self):
+        """A 4-minute door event should NOT trigger DOOR alarm."""
+        ag = AlarmGenerator(_make_rng(seed=1))
+        events = [DoorEvent(start_offset_s=100, duration_s=240)]  # 4 min
+        result = ag.derive_alarms(
+            tvc=5.0, power_available=True, timestamp=SIM_START,
+            door_events=events, interval_s=900.0,
+        )
+        assert result['ALRM'] is None
+
+    def test_alarm_triggers_single_long_event(self):
+        """A single 6-minute door event should trigger DOOR alarm."""
+        ag = AlarmGenerator(_make_rng(seed=1))
+        events = [DoorEvent(start_offset_s=100, duration_s=360)]  # 6 min
+        result = ag.derive_alarms(
+            tvc=5.0, power_available=True, timestamp=SIM_START,
+            door_events=events, interval_s=900.0,
+        )
+        assert result['ALRM'] == 'DOOR'
+
+    def test_alarm_boundary_exactly_5_minutes(self):
+        """Exactly 5 minutes (300s) should trigger (threshold is >=)."""
+        ag = AlarmGenerator(_make_rng(seed=1))
+        events = [DoorEvent(start_offset_s=0, duration_s=300)]
+        result = ag.derive_alarms(
+            tvc=5.0, power_available=True, timestamp=SIM_START,
+            door_events=events, interval_s=900.0,
+        )
+        assert result['ALRM'] == 'DOOR'
+
+    def test_no_alarm_many_short_events(self):
+        """Multiple short events totalling > 5 min should NOT trigger."""
+        ag = AlarmGenerator(_make_rng(seed=1))
+        # 10 events of 60s each (total 10 min) but none continuous
+        events = [DoorEvent(start_offset_s=i * 90, duration_s=60) for i in range(10)]
+        result = ag.derive_alarms(
+            tvc=5.0, power_available=True, timestamp=SIM_START,
+            door_events=events, interval_s=900.0,
+        )
+        assert result['ALRM'] is None
+
+    def test_alarm_cross_interval_continuity(self):
+        """Door open at end of interval N and start of N+1 should accumulate."""
+        ag = AlarmGenerator(_make_rng(seed=1))
+        t0 = SIM_START
+        interval = 900.0
+
+        # Interval 0: door open for last 200s (offset 700, duration 200)
+        events_0 = [DoorEvent(start_offset_s=700, duration_s=200)]
+        ag.derive_alarms(
+            tvc=5.0, power_available=True, timestamp=t0,
+            door_events=events_0, interval_s=interval,
+        )
+
+        # Interval 1: door open from start for 200s
+        t1 = t0 + dt.timedelta(seconds=interval)
+        events_1 = [DoorEvent(start_offset_s=0, duration_s=200)]
+        result = ag.derive_alarms(
+            tvc=5.0, power_available=True, timestamp=t1,
+            door_events=events_1, interval_s=interval,
+        )
+        # 200s + 200s = 400s > 300s → alarm
+        assert result['ALRM'] == 'DOOR'
+
+    def test_no_alarm_cross_interval_gap(self):
+        """Door open at end of N but NOT at start of N+1 → no accumulation."""
+        ag = AlarmGenerator(_make_rng(seed=1))
+        t0 = SIM_START
+        interval = 900.0
+
+        # Interval 0: door open for last 200s
+        events_0 = [DoorEvent(start_offset_s=700, duration_s=200)]
+        ag.derive_alarms(
+            tvc=5.0, power_available=True, timestamp=t0,
+            door_events=events_0, interval_s=interval,
+        )
+
+        # Interval 1: door opens at offset 10 (gap at start → not continuous)
+        t1 = t0 + dt.timedelta(seconds=interval)
+        events_1 = [DoorEvent(start_offset_s=10, duration_s=200)]
+        result = ag.derive_alarms(
+            tvc=5.0, power_available=True, timestamp=t1,
+            door_events=events_1, interval_s=interval,
+        )
+        assert result['ALRM'] is None
+
+    def test_alarm_stuck_door_across_intervals(self):
+        """Full-interval door opening across 2 intervals (stuck door fault)."""
+        ag = AlarmGenerator(_make_rng(seed=1))
+        t = SIM_START
+        interval = 900.0
+
+        # Two full intervals of door open (1800s >> 300s threshold)
+        for i in range(2):
+            events = [DoorEvent(start_offset_s=0, duration_s=interval)]
+            result = ag.derive_alarms(
+                tvc=5.0, power_available=True, timestamp=t,
+                door_events=events, interval_s=interval,
+            )
+            t += dt.timedelta(seconds=interval)
+
+        assert result['ALRM'] == 'DOOR'
+
+    def test_alarm_clears_when_door_closes(self):
+        """DOOR alarm should stop once the door is closed."""
+        ag = AlarmGenerator(_make_rng(seed=1))
+        t = SIM_START
+        interval = 900.0
+
+        # Build DOOR alarm: stuck open for 2 intervals
+        for i in range(2):
+            events = [DoorEvent(start_offset_s=0, duration_s=interval)]
+            ag.derive_alarms(
+                tvc=5.0, power_available=True, timestamp=t,
+                door_events=events, interval_s=interval,
+            )
+            t += dt.timedelta(seconds=interval)
+
+        # Door closes — no events
+        result = ag.derive_alarms(
+            tvc=5.0, power_available=True, timestamp=t,
+            door_events=[], interval_s=interval,
+        )
+        assert result['ALRM'] is None
+
+    def test_no_alarm_when_no_door_events_passed(self):
+        """When door_events is None (legacy call), DOOR alarm never fires."""
+        ag = AlarmGenerator(_make_rng(seed=1))
+        result = ag.derive_alarms(tvc=5.0, power_available=True, timestamp=SIM_START)
+        assert result['ALRM'] is None
+
+
+# ===================================================================
+# 5c. POWR alarm
+# ===================================================================
+
+class TestPowrAlarm:
+    """POWR alarm triggers after > 24 hours of continuous no-power."""
+
+    def test_no_alarm_before_24_hours(self):
+        ag = AlarmGenerator(_make_rng(seed=1))
+        t = SIM_START
+        ag.derive_alarms(tvc=5.0, power_available=True, timestamp=t)
+        # Power loss for 23 hours
+        t += dt.timedelta(hours=1)
+        ag.derive_alarms(tvc=5.0, power_available=False, timestamp=t)
+        t += dt.timedelta(hours=23)
+        result = ag.derive_alarms(tvc=5.0, power_available=False, timestamp=t)
+        assert result['ALRM'] is None
+
+    def test_alarm_triggers_at_24_hours(self):
+        ag = AlarmGenerator(_make_rng(seed=1))
+        t = SIM_START
+        ag.derive_alarms(tvc=5.0, power_available=True, timestamp=t)
+        # Power loss
+        t += dt.timedelta(hours=1)
+        ag.derive_alarms(tvc=5.0, power_available=False, timestamp=t)
+        # 25 hours later → 25h total outage
+        t += dt.timedelta(hours=25)
+        result = ag.derive_alarms(tvc=5.0, power_available=False, timestamp=t)
+        assert result['ALRM'] == 'POWR'
+
+    def test_alarm_clears_when_power_restored(self):
+        ag = AlarmGenerator(_make_rng(seed=1))
+        t = SIM_START
+        ag.derive_alarms(tvc=5.0, power_available=True, timestamp=t)
+        # 26h outage → POWR alarm
+        t += dt.timedelta(hours=1)
+        ag.derive_alarms(tvc=5.0, power_available=False, timestamp=t)
+        t += dt.timedelta(hours=26)
+        ag.derive_alarms(tvc=5.0, power_available=False, timestamp=t)
+        # Power restored
+        t += dt.timedelta(hours=1)
+        result = ag.derive_alarms(tvc=5.0, power_available=True, timestamp=t)
+        assert result['ALRM'] is None
+
+    def test_powr_coexists_with_heat(self):
+        """POWR and HEAT can appear together in ALRM field."""
+        ag = AlarmGenerator(_make_rng(seed=1))
+        t = SIM_START
+        ag.derive_alarms(tvc=5.0, power_available=True, timestamp=t)
+        # Sustained high temp + power loss for 25 hours
+        t += dt.timedelta(hours=1)
+        for i in range(100):  # 100 * 15min = 25 hours
+            result = ag.derive_alarms(tvc=12.0, power_available=False, timestamp=t)
+            t += dt.timedelta(minutes=15)
+        # Both HEAT (>10h at >8°C) and POWR (>24h no power) should be active
+        assert 'HEAT' in result['ALRM']
+        assert 'POWR' in result['ALRM']
+
+
+# ===================================================================
+# 5d. Multi-code ALRM field
+# ===================================================================
+
+class TestMultiCodeAlarm:
+    """ALRM field carries all active codes as a space-separated string."""
+
+    def test_heat_and_door_together(self):
+        ag = AlarmGenerator(_make_rng(seed=1))
+        t = SIM_START
+        # 11 hours of TVC > 8 with door stuck open every interval
+        for i in range(44):
+            events = [DoorEvent(start_offset_s=0, duration_s=900.0)]
+            result = ag.derive_alarms(
+                tvc=10.0, power_available=True, timestamp=t,
+                door_events=events, interval_s=900.0,
+            )
+            t += dt.timedelta(minutes=15)
+        assert 'HEAT' in result['ALRM']
+        assert 'DOOR' in result['ALRM']
+
+    def test_single_alarm_no_trailing_space(self):
+        ag = AlarmGenerator(_make_rng(seed=1))
+        t = SIM_START
+        for i in range(5):
+            result = ag.derive_alarms(tvc=-2.0, power_available=True, timestamp=t)
+            t += dt.timedelta(minutes=15)
+        assert result['ALRM'] == 'FRZE'
+        assert ' ' not in result['ALRM']
+
+
+# ===================================================================
 # 6. HOLD tracking during power loss
 # ===================================================================
 

@@ -1,0 +1,15 @@
+{
+  "name": "ems-data-simulator",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "JavaScript port of the EMS cold-chain data simulator",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "seedrandom": "^3.0.5"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.2"
+  }
+}

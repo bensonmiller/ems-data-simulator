@@ -151,18 +151,22 @@ class FaultInjector:
 class AlarmGenerator:
     """Derives alarm fields from simulation state.
 
-    HEAT and FRZE alarms follow WHO PQS rules:
-    - HEAT: triggered after 10 continuous hours with TVC > +8°C.
-    - FRZE: triggered after 60 continuous minutes with TVC <= -0.5°C.
-    Once triggered, the alarm code is recorded each interval until the
-    excursion ends (TVC returns to normal range).  The excursion timer
-    resets when the temperature recovers, so the next alarm requires a
-    full new excursion of the same duration.
+    Alarm codes follow the WHO PQS E003 specification.  The ALRM field
+    carries all currently active codes as a space-separated string
+    (e.g. ``"HEAT DOOR"``).
+
+    Supported alarms and their continuous-excursion thresholds:
+    - HEAT: TVC > +8 °C for 10 continuous hours.
+    - FRZE: TVC <= −0.5 °C for 60 continuous minutes.
+    - DOOR: door/lid continuously open for > 5 minutes.
+    - POWR: continuous no-power condition for > 24 hours.
     """
 
     # Duration thresholds (seconds)
     HEAT_THRESHOLD_S = 10 * 3600   # 10 hours
     FRZE_THRESHOLD_S = 60 * 60     # 60 minutes
+    DOOR_THRESHOLD_S = 5 * 60      # 5 minutes
+    POWR_THRESHOLD_S = 24 * 3600   # 24 hours
 
     def __init__(self, rng: random.Random):
         self.rng = rng
@@ -171,12 +175,98 @@ class AlarmGenerator:
         # Continuous excursion tracking
         self._heat_excursion_start: Optional[dt.datetime] = None
         self._frze_excursion_start: Optional[dt.datetime] = None
+        # Cross-interval door continuity tracking
+        self._continuous_door_start: Optional[dt.datetime] = None
+        self._door_open_at_prev_end: bool = False
+
+    def _merge_door_spans(self, door_events: List[DoorEvent]) -> List[tuple]:
+        """Merge overlapping/adjacent door events into continuous spans.
+
+        Returns a sorted list of (start_offset_s, end_offset_s) tuples.
+        """
+        if not door_events:
+            return []
+        EPSILON = 1.0
+        events = sorted(door_events, key=lambda e: e.start_offset_s)
+        spans = []
+        cur_start = events[0].start_offset_s
+        cur_end = events[0].start_offset_s + events[0].duration_s
+        for e in events[1:]:
+            e_end = e.start_offset_s + e.duration_s
+            if e.start_offset_s <= cur_end + EPSILON:
+                cur_end = max(cur_end, e_end)
+            else:
+                spans.append((cur_start, cur_end))
+                cur_start = e.start_offset_s
+                cur_end = e_end
+        spans.append((cur_start, cur_end))
+        return spans
+
+    def _check_door_alarm(
+        self,
+        door_events: List[DoorEvent],
+        interval_s: float,
+        timestamp: dt.datetime,
+    ) -> bool:
+        """Evaluate DOOR alarm using sub-interval door events.
+
+        Detects continuous door-open periods >= DOOR_THRESHOLD_S, including
+        spans that straddle interval boundaries.
+        """
+        EPSILON = 1.0
+        spans = self._merge_door_spans(door_events)
+
+        if not spans:
+            # No door activity — reset continuity
+            self._continuous_door_start = None
+            self._door_open_at_prev_end = False
+            return False
+
+        open_at_start = spans[0][0] <= EPSILON
+        open_at_end = spans[-1][1] >= interval_s - EPSILON
+
+        triggered = False
+
+        if self._door_open_at_prev_end and open_at_start:
+            # Continuity from previous interval — find how far the
+            # door stays open from offset 0 (first merged span).
+            continuous_end = spans[0][1]
+            total_s = (timestamp - self._continuous_door_start).total_seconds() + continuous_end
+            if total_s >= self.DOOR_THRESHOLD_S:
+                triggered = True
+            # If the first span doesn't reach interval end, the carry-over
+            # chain breaks here; start fresh from the last span if needed.
+            if not open_at_end or (len(spans) > 1 and spans[0][1] < interval_s - EPSILON):
+                # First span didn't bridge all the way to end; reset.
+                if open_at_end:
+                    # A *different* span reaches the end — new chain.
+                    last_start = spans[-1][0]
+                    self._continuous_door_start = timestamp + dt.timedelta(seconds=last_start)
+                else:
+                    self._continuous_door_start = None
+            # else: single span covers start-to-end, keep existing _continuous_door_start
+        else:
+            # No carry-over — check individual spans within this interval.
+            for s_start, s_end in spans:
+                if s_end - s_start >= self.DOOR_THRESHOLD_S:
+                    triggered = True
+                    break
+            # Seed carry-over from the span that reaches the interval end.
+            if open_at_end:
+                self._continuous_door_start = timestamp + dt.timedelta(seconds=spans[-1][0])
+            else:
+                self._continuous_door_start = None
+
+        self._door_open_at_prev_end = open_at_end
+        return triggered
 
     def derive_alarms(
         self,
         tvc: float,
         power_available: bool,
         timestamp: dt.datetime,
+        door_events: Optional[List[DoorEvent]] = None,
+        interval_s: float = 900.0,
     ) -> dict:
         """Compute ALRM, HOLD, and EERR fields.
 
@@ -184,9 +274,12 @@ class AlarmGenerator:
             tvc: Current vaccine chamber temperature.
             power_available: Whether power is currently available.
             timestamp: Current timestamp.
+            door_events: Sub-interval door events for DOOR alarm evaluation.
+            interval_s: Length of the sample interval in seconds.
 
         Returns:
-            Dict with ALRM, HOLD, EERR keys.
+            Dict with ALRM, HOLD, EERR keys.  ALRM is a space-separated
+            string of all active alarm codes, or None if no alarms are active.
         """
         # Track power loss for HOLD calculation
         if not power_available and self._power_was_available:
@@ -195,8 +288,8 @@ class AlarmGenerator:
             self._last_power_loss = None
         self._power_was_available = power_available
 
-        # ALRM — WHO continuous-excursion rules
-        alrm = None
+        # Collect active alarm codes
+        codes: List[str] = []
 
         # HEAT: continuous TVC > 8.0°C for 10 hours
         if tvc > 8.0:
@@ -204,7 +297,7 @@ class AlarmGenerator:
                 self._heat_excursion_start = timestamp
             elapsed = (timestamp - self._heat_excursion_start).total_seconds()
             if elapsed >= self.HEAT_THRESHOLD_S:
-                alrm = "HEAT"
+                codes.append("HEAT")
         else:
             self._heat_excursion_start = None
 
@@ -214,9 +307,19 @@ class AlarmGenerator:
                 self._frze_excursion_start = timestamp
             elapsed = (timestamp - self._frze_excursion_start).total_seconds()
             if elapsed >= self.FRZE_THRESHOLD_S:
-                alrm = "FRZE"
+                codes.append("FRZE")
         else:
             self._frze_excursion_start = None
+
+        # DOOR: continuous door open > 5 minutes
+        if door_events is not None and self._check_door_alarm(door_events, interval_s, timestamp):
+            codes.append("DOOR")
+
+        # POWR: continuous no-power > 24 hours
+        if self._last_power_loss is not None:
+            power_elapsed = (timestamp - self._last_power_loss).total_seconds()
+            if power_elapsed >= self.POWR_THRESHOLD_S:
+                codes.append("POWR")
 
         # HOLD: seconds since power loss (holdover time)
         hold = None
@@ -229,7 +332,7 @@ class AlarmGenerator:
             eerr = ''.join(self.rng.choices('abcdefghijklmnopqrstuvwxyz', k=5))
 
         return {
-            'ALRM': alrm,
+            'ALRM': ' '.join(codes) if codes else None,
             'HOLD': hold,
             'EERR': eerr,
         }
