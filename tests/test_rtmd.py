@@ -8,10 +8,11 @@ from utils.schemas import (
 
 def test_metadata(transfer_metadata):
     assert isinstance(transfer_metadata, dict)
-    assert len(transfer_metadata) == 5
+    assert len(transfer_metadata) == 6
     assert isinstance(transfer_metadata['transferId'], str)
     assert isinstance(transfer_metadata['transferSrc'], str)
     assert isinstance(transfer_metadata['transferredAt'], datetime)
+    assert transfer_metadata['transferType'] == 'rtm'
     assert isinstance(transfer_metadata['schemaVersion'], str)
     assert transfer_metadata['callbackUrl'] is None
 
@@ -41,12 +42,13 @@ def test_rtmd_transfer(rtmd_transfer):
     assert isinstance(rtmd_transfer, dict)
     assert len(rtmd_transfer) == 2
     assert isinstance(rtmd_transfer['meta'], dict)
-    assert len(rtmd_transfer['meta']) == 5
+    assert len(rtmd_transfer['meta']) == 6
     assert isinstance(rtmd_transfer['meta']['transferId'], str)
     assert isinstance(rtmd_transfer['meta']['transferSrc'], str)
     assert rtmd_transfer['meta']['transferSrc'] == 'org.nhgh'
     assert isinstance(rtmd_transfer['meta']['transferredAt'], datetime)
-    assert rtmd_transfer['meta']['schemaVersion'] == 'rtm:1.0'
+    assert rtmd_transfer['meta']['transferType'] == 'rtm'
+    assert rtmd_transfer['meta']['schemaVersion'] == '0.8.0'
     assert isinstance(rtmd_transfer['meta']['schemaVersion'], str)
 
 def test_transfer_metadata_to_pydantic_model(transfer_metadata):

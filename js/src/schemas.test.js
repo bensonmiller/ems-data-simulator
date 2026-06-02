@@ -48,7 +48,8 @@ describe('TransferMetadata', () => {
     const json = tm.toJSON();
     expect(json.transferId).toBe('abc-123');
     expect(json.transferSrc).toBe('org.nhgh');
-    expect(json.schemaVersion).toBe('rtm:1.0');
+    expect(json.transferType).toBe('rtm');
+    expect(json.schemaVersion).toBe('0.8.0');
     expect(json).toHaveProperty('transferredAt');
     expect(json).not.toHaveProperty('callbackUrl');
   });

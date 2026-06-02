@@ -12,12 +12,11 @@ def transfer_metadata(type='rtmd'):
         'transferId': str(uuid4()),
         'transferSrc': 'org.nhgh',
         'transferredAt': datetime.now(pytz.utc),
-        'schemaVersion': None,
+        'transferType': 'rtm',
+        'schemaVersion': '0.8.0',
         'callbackUrl': None
     }
     if type == 'ems':
-        obj['schemaVersion'] = 'ems:1.0'
-    else:
-        obj['schemaVersion'] = 'rtm:1.0'
+        obj['transferType'] = 'ems'
 
     return obj

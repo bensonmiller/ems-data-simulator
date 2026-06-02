@@ -18,7 +18,8 @@ class TransferMetadata(BaseModel, arbitrary_types_allowed=True):
     transferId: str
     transferSrc: str = 'org.nhgh'
     transferredAt: dt.datetime = Field(default_factory=lambda: dt.datetime.now(dt.UTC))
-    schemaVersion: str = 'rtm:1.0'
+    transferType: str = 'rtm'
+    schemaVersion: str = '0.8.0'
     callbackUrl: Optional[HttpUrl] = None
 
 class EmsRecord(BaseModel, extra='allow', arbitrary_types_allowed=True):

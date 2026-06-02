@@ -44,7 +44,8 @@ def transfer_metadata():
         'transferId': str(uuid4()),
         'transferSrc': 'org.nhgh',
         'transferredAt': datetime.now(pytz.utc),
-        'schemaVersion': 'rtm:1.0',
+        'transferType': 'rtm',
+        'schemaVersion': '0.8.0',
         'callbackUrl': None
     }
     return obj

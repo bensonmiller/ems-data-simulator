@@ -30,7 +30,8 @@ export function transferMetadata(type = "rtmd") {
     transferId: crypto.randomUUID(),
     transferSrc: "org.nhgh",
     transferredAt: new Date(),
-    schemaVersion: type === "ems" ? "ems:1.0" : "rtm:1.0",
+    transferType: type === "ems" ? "ems" : "rtm",
+    schemaVersion: "0.8.0",
     callbackUrl: null,
   };
 }

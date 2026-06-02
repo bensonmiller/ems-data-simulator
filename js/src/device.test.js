@@ -257,14 +257,16 @@ describe("transferMetadata", () => {
     const meta = transferMetadata("rtmd");
     expect(meta.transferId).toBeDefined();
     expect(meta.transferSrc).toBe("org.nhgh");
-    expect(meta.schemaVersion).toBe("rtm:1.0");
+    expect(meta.transferType).toBe("rtm");
+    expect(meta.schemaVersion).toBe("0.8.0");
     expect(meta.callbackUrl).toBeNull();
     expect(meta.transferredAt).toBeInstanceOf(Date);
   });
 
-  it("returns ems:1.0 schema version for EMS", () => {
+  it("returns ems transferType and semver schemaVersion for EMS", () => {
     const meta = transferMetadata("ems");
-    expect(meta.schemaVersion).toBe("ems:1.0");
+    expect(meta.transferType).toBe("ems");
+    expect(meta.schemaVersion).toBe("0.8.0");
   });
 });
 

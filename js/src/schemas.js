@@ -59,19 +59,22 @@ export class TransferMetadata {
    * @param {string} opts.transferId
    * @param {string} [opts.transferSrc='org.nhgh']
    * @param {Date}   [opts.transferredAt]
-   * @param {string} [opts.schemaVersion='rtm:1.0']
+   * @param {'rtm'|'ems'} [opts.transferType='rtm']
+   * @param {string} [opts.schemaVersion='0.8.0']
    * @param {string|null} [opts.callbackUrl]
    */
   constructor({
     transferId,
     transferSrc = 'org.nhgh',
     transferredAt = new Date(),
-    schemaVersion = 'rtm:1.0',
+    transferType = 'rtm',
+    schemaVersion = '0.8.0',
     callbackUrl = null,
   }) {
     this.transferId = transferId;
     this.transferSrc = transferSrc;
     this.transferredAt = transferredAt;
+    this.transferType = transferType;
     this.schemaVersion = schemaVersion;
     this.callbackUrl = callbackUrl;
   }
@@ -83,6 +86,7 @@ export class TransferMetadata {
       transferredAt: this.transferredAt instanceof Date
         ? this.transferredAt.toISOString()
         : this.transferredAt,
+      transferType: this.transferType,
       schemaVersion: this.schemaVersion,
     };
     if (this.callbackUrl != null) {
