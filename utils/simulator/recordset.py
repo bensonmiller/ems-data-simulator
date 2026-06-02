@@ -196,10 +196,10 @@ class SimulatedRecordSet:
 
             # 11. Battery/BLOG for mains. A mains EMD/logger keeps its backup
             # battery topped up, so days-of-life-remaining sits near full with
-            # small variation (schema BLOG/BEMD are days, range [0, 9999.9]).
+            # small variation (BLOG max 9999 integer days per Annex; BEMD max 9999.9).
             if not is_solar:
                 full_days = config.power.blog_full_days
-                blog = round(max(0.0, min(9999.9, rng.gauss(full_days, full_days * 0.02))), 1)
+                blog = round(max(0.0, min(9999, rng.gauss(full_days, full_days * 0.02))), 1)
                 power_record['BLOG'] = blog
                 power_record['BEMD'] = blog
 

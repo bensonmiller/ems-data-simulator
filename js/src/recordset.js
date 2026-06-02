@@ -216,12 +216,12 @@ export class SimulatedRecordSet {
 
       // 11. Battery/BLOG for mains. A mains EMD/logger keeps its backup battery
       // topped up, so days-of-life-remaining sits near full with small variation
-      // (schema BLOG/BEMD are days, range [0, 9999.9]).
+      // (BLOG max 9999 integer days per Annex; BEMD max 9999.9).
       if (!isSolar) {
         const fullDays = config.power.blog_full_days;
         const blog =
           Math.round(
-            Math.max(0.0, Math.min(9999.9, rng.gauss(fullDays, fullDays * 0.02))) * 10
+            Math.max(0.0, Math.min(9999, rng.gauss(fullDays, fullDays * 0.02))) * 10
           ) / 10;
         powerRecord.BLOG = blog;
         powerRecord.BEMD = blog;
