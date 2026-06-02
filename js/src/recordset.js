@@ -202,6 +202,7 @@ export class SimulatedRecordSet {
         timestamp,
         interval,
         thermalRecord.CMPR,
+        faultEffects.power_available_override,
       );
 
       // 10. Alarms (uses events.js door event format)

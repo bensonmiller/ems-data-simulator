@@ -78,7 +78,7 @@ class TestMainsPowerModelSimulateInterval:
         state, readings = model.simulate_interval(state, NOON, INTERVAL, INTERVAL)
         expected = cfg.mains_baseline_current_a + cfg.mains_compressor_current_a
         assert readings["ACCD"] == pytest.approx(round(expected, 2))
-        assert 0.01 <= readings["ACCD"] <= 49.99
+        assert 0.0 <= readings["ACCD"] <= 49.99
 
     def test_acsv_near_nominal_voltage(self):
         cfg = _mains_config(nominal_voltage=600)
@@ -90,16 +90,32 @@ class TestMainsPowerModelSimulateInterval:
 
 
 class TestMainsPowerModelOutage:
-    """Outage behavior: SVA=0; ACCD floored to schema minimum when in_outage."""
+    """Outage behavior: SVA=0; ACCD=0 (no AC draw) when in_outage."""
 
     def test_readings_zero_during_outage(self):
         model = MainsPowerModel(_mains_config(), random.Random(42))
         state = PowerState(in_outage=True, outage_end=NOON + dt.timedelta(hours=5))
         state, readings = model.simulate_interval(state, NOON, INTERVAL, 0.0)
         assert readings["SVA"] == 0
-        # No AC current during an outage, floored to the schema minimum (0.01).
-        assert readings["ACCD"] == 0.01
+        # No AC supply during an outage -> no current drawn (Annex ACCD min 0).
+        assert readings["ACCD"] == 0.0
         assert readings["ACSV"] == 0.0
+
+    def test_fault_override_forces_outage_readings(self):
+        # A POWER_OUTAGE fault (power_available_override=False) forces the mains
+        # supply off for the interval even with no stochastic outage active:
+        # SVA/ACSV/ACCD must all reflect the outage (ccesim-fuq).
+        cfg = _mains_config(outage_probability_per_hour=0.0)
+        model = MainsPowerModel(cfg, random.Random(42))
+        state = PowerState()
+        state, readings = model.simulate_interval(
+            state, NOON, INTERVAL, INTERVAL, power_available_override=False
+        )
+        assert state.in_outage is False  # no stochastic outage
+        assert readings["SVA"] == 0
+        assert readings["ACSV"] == 0.0
+        assert readings["ACCD"] == 0.0
+        assert state.cumulative_powered_s == 0.0
 
     def test_cumulative_powered_does_not_increase_during_outage(self):
         model = MainsPowerModel(_mains_config(), random.Random(42))
@@ -246,6 +262,28 @@ class TestSolarBatterySOC:
         state = PowerState()
         state, readings = model.simulate_interval(state, NOON, INTERVAL, 0.0)
         assert set(readings.keys()) == {"DCSV", "DCCD", "BLOG", "BEMD"}
+
+    def test_dccd_rounded_to_one_decimal(self):
+        # DCCD Annex Data Format is '00.0' -> 1 decimal place (ccesim-l0s).
+        # Runtime 730s of 900s -> raw 6.0 * 730/900 = 4.8667, which rounds to
+        # 4.9 at 1 dp but 4.87 at 2 dp, so this distinguishes the two.
+        cfg = _solar_config(solar_compressor_current_a=6.0)
+        model = SolarPowerModel(cfg, random.Random(42))
+        state = PowerState()
+        state, readings = model.simulate_interval(state, NOON, INTERVAL, 730.0)
+        assert readings["DCCD"] == 4.9
+
+    def test_fault_override_forces_no_solar_power(self):
+        # A POWER_OUTAGE fault forces power unavailable regardless of solar
+        # voltage: no DC compressor draw, battery drains (ccesim-fuq mirror).
+        model = SolarPowerModel(_solar_config(), random.Random(42))
+        state = PowerState(battery_soc=0.8)
+        state, readings = model.simulate_interval(
+            state, NOON, INTERVAL, INTERVAL, power_available_override=False
+        )
+        assert readings["DCCD"] == 0.0
+        assert state.cumulative_powered_s == 0.0
+        assert state.battery_soc < 0.8  # logger battery drains, no charge
 
     def test_blog_is_days_remaining(self):
         """BLOG/BEMD are estimated DAYS of battery life remaining (0-9999.9),

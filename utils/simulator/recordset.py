@@ -182,6 +182,7 @@ class SimulatedRecordSet:
                 timestamp=timestamp,
                 interval_s=float(interval),
                 compressor_runtime_s=float(thermal_record['CMPR']),
+                power_available_override=fault_effects.power_available_override,
             )
 
             # 10. Alarms

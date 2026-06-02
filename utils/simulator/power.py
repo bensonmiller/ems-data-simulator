@@ -61,15 +61,25 @@ class MainsPowerModel:
         timestamp: dt.datetime,
         interval_s: float,
         compressor_runtime_s: float,
+        power_available_override: Optional[bool] = None,
     ) -> Tuple[PowerState, dict]:
         """Compute power readings for one interval.
+
+        power_available_override mirrors FaultEffects.power_available_override:
+        when False (e.g. a POWER_OUTAGE fault) the mains supply is forced off
+        for this interval even if no stochastic outage is active, so SVA/ACSV/
+        ACCD all reflect the outage. When None, behaviour is purely stochastic.
 
         Returns:
             Tuple of (updated PowerState, dict with SVA, ACCD, ACSV).
         """
         state = self._check_outage(state, timestamp, interval_s)
 
-        if state.in_outage:
+        # Either a modeled stochastic outage or a fault that forces power off
+        # leaves the appliance with no usable AC supply this interval.
+        outage = state.in_outage or power_available_override is False
+
+        if outage:
             acsv = 0.0
             powered_s = 0.0
         else:
@@ -87,15 +97,15 @@ class MainsPowerModel:
 
         # ACCD is the AC current (amps) drawn by the appliance, modeled from the
         # compressor duty cycle: a small always-on baseline plus the running
-        # compressor draw scaled by the fraction of the interval it ran. The
-        # interop schema requires ACCD in [0.01, 49.99], so the no-current case
-        # (compressor idle or mains outage) is floored to the schema minimum.
+        # compressor draw scaled by the fraction of the interval it ran. With no
+        # AC supply (mains outage) the appliance draws no current, so ACCD is 0 A
+        # per the PQS E006 DS01.2 Annex-1 ACCD minimum of 0 (Data Format 00.00).
         duty = compressor_runtime_s / interval_s if interval_s > 0 else 0.0
-        accd = 0.0 if state.in_outage else (
+        accd = 0.0 if outage else (
             self.config.mains_baseline_current_a
             + self.config.mains_compressor_current_a * duty
         )
-        accd = round(min(49.99, max(0.01, accd)), 2)
+        accd = round(min(49.99, max(0.0, accd)), 2)
 
         readings = {
             'SVA': sva,
@@ -143,14 +153,22 @@ class SolarPowerModel:
         timestamp: dt.datetime,
         interval_s: float,
         compressor_runtime_s: float,
+        power_available_override: Optional[bool] = None,
     ) -> Tuple[PowerState, dict]:
         """Compute power readings and update logger battery SOC.
+
+        power_available_override mirrors FaultEffects.power_available_override:
+        when False (e.g. a POWER_OUTAGE fault) power is forced unavailable for
+        this interval regardless of solar voltage, so the compressor draws no
+        DC current and the logger battery drains.
 
         Returns:
             Tuple of (updated PowerState, dict with DCSV, DCCD, BLOG, BEMD).
         """
         dcsv = round(self._solar_voltage(timestamp), 1)
         solar_power_available = dcsv >= self.config.min_operating_voltage
+        if power_available_override is False:
+            solar_power_available = False
 
         # Logger battery dynamics (BLOG)
         # The logger battery is a small cell that charges from solar and
@@ -173,10 +191,11 @@ class SolarPowerModel:
         # DCCD is the DC current (amps) drawn by the compressor, modeled from the
         # compressor duty cycle while solar power is available (an SDD compressor
         # runs directly off the panels, so it draws no DC current without solar).
-        # The interop schema requires DCCD in [0, 99.9].
+        # DCCD range is [0, 99.9]; the PQS E006 DS01.2 Annex-1 Data Format is
+        # '00.0' (1 decimal place), unlike ACCD's '00.00'.
         duty = compressor_runtime_s / interval_s if interval_s > 0 else 0.0
         dccd = self.config.solar_compressor_current_a * duty if solar_power_available else 0.0
-        dccd = round(min(99.9, max(0.0, dccd)), 2)
+        dccd = round(min(99.9, max(0.0, dccd)), 1)
 
         # BLOG/BEMD: estimated DAYS of battery life remaining, scaled from the
         # logger battery state of charge (schema range [0, 9999.9]).

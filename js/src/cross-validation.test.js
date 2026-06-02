@@ -266,10 +266,12 @@ describe("Physical plausibility", () => {
           }
         });
 
-        it("ACCD is a current within the schema range [0.01, 49.99]", () => {
+        it("ACCD is a current within the Annex range [0, 49.99]", () => {
+          // PQS Annex-1 sets ACCD minimum to 0 (0 A during a mains outage/no
+          // draw); the upper bound stays at the interop schema's 49.99.
           for (let i = 0; i < jsResult.records.length; i++) {
             const accd = jsResult.records[i].ACCD;
-            expect(accd, `Record ${i}: ACCD`).toBeGreaterThanOrEqual(0.01);
+            expect(accd, `Record ${i}: ACCD`).toBeGreaterThanOrEqual(0);
             expect(accd, `Record ${i}: ACCD`).toBeLessThanOrEqual(49.99);
           }
         });

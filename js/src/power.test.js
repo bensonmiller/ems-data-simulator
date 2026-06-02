@@ -82,7 +82,7 @@ describe("MainsPowerModel.simulate_interval", () => {
     const expected =
       cfg.mains_baseline_current_a + cfg.mains_compressor_current_a;
     expect(readings.ACCD).toBeCloseTo(expected, 5);
-    expect(readings.ACCD).toBeGreaterThanOrEqual(0.01);
+    expect(readings.ACCD).toBeGreaterThanOrEqual(0.0);
     expect(readings.ACCD).toBeLessThanOrEqual(49.99);
   });
 
@@ -106,9 +106,28 @@ describe("MainsPowerModel outage behavior", () => {
     });
     const [, readings] = model.simulate_interval(state, NOON, INTERVAL, 0.0);
     expect(readings.SVA).toBe(0);
-    // No AC current during an outage, floored to the schema minimum (0.01).
-    expect(readings.ACCD).toBe(0.01);
+    // No AC supply during an outage -> no current drawn (Annex ACCD min 0).
+    expect(readings.ACCD).toBe(0.0);
     expect(readings.ACSV).toBe(0.0);
+  });
+
+  it("fault override forces outage readings without a stochastic outage", () => {
+    // A POWER_OUTAGE fault (power_available_override=false) forces the mains
+    // supply off even with no stochastic outage active (ccesim-fuq).
+    const cfg = mainsConfig({ outage_probability_per_hour: 0.0 });
+    const model = new MainsPowerModel(cfg, new SeededRandom(42));
+    const [state, readings] = model.simulate_interval(
+      new PowerState(),
+      NOON,
+      INTERVAL,
+      INTERVAL,
+      false
+    );
+    expect(state.in_outage).toBe(false);
+    expect(readings.SVA).toBe(0);
+    expect(readings.ACSV).toBe(0.0);
+    expect(readings.ACCD).toBe(0.0);
+    expect(state.cumulative_powered_s).toBe(0.0);
   });
 
   it("cumulative_powered_s does not increase during outage", () => {
@@ -294,6 +313,37 @@ describe("SolarPowerModel battery SOC", () => {
     expect(Object.keys(readings).sort()).toEqual(
       ["BEMD", "BLOG", "DCCD", "DCSV"].sort()
     );
+  });
+
+  it("DCCD rounded to one decimal place", () => {
+    // DCCD Annex Data Format is '00.0' -> 1 decimal place (ccesim-l0s).
+    // Runtime 730s of 900s -> raw 6.0 * 730/900 = 4.8667, which rounds to 4.9
+    // at 1 dp but 4.87 at 2 dp, so this distinguishes the two.
+    const cfg = solarConfig({ solar_compressor_current_a: 6.0 });
+    const model = new SolarPowerModel(cfg, new SeededRandom(42));
+    const [, readings] = model.simulate_interval(
+      new PowerState(),
+      NOON,
+      INTERVAL,
+      730.0
+    );
+    expect(readings.DCCD).toBe(4.9);
+  });
+
+  it("fault override forces no solar power", () => {
+    // A POWER_OUTAGE fault forces power unavailable regardless of solar
+    // voltage: no DC compressor draw, battery drains (ccesim-fuq mirror).
+    const model = new SolarPowerModel(solarConfig(), new SeededRandom(42));
+    const [state, readings] = model.simulate_interval(
+      new PowerState({ battery_soc: 0.8 }),
+      NOON,
+      INTERVAL,
+      INTERVAL,
+      false
+    );
+    expect(readings.DCCD).toBe(0.0);
+    expect(state.cumulative_powered_s).toBe(0.0);
+    expect(state.battery_soc).toBeLessThan(0.8);
   });
 
   it("BLOG is days-remaining, scaled from SOC (not voltage)", () => {

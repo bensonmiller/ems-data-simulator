@@ -78,17 +78,34 @@ export class MainsPowerModel {
 
   /**
    * Compute power readings for one interval.
+   *
+   * power_available_override mirrors FaultEffects.power_available_override:
+   * when false (e.g. a POWER_OUTAGE fault) the mains supply is forced off for
+   * this interval even if no stochastic outage is active, so SVA/ACSV/ACCD all
+   * reflect the outage. When null/undefined, behaviour is purely stochastic.
+   *
    * @param {PowerState} state
    * @param {Date} timestamp
    * @param {number} interval_s
    * @param {number} compressor_runtime_s
+   * @param {boolean|null} [power_available_override=null]
    * @returns {[PowerState, {SVA: number, ACCD: number, ACSV: number}]}
    */
-  simulate_interval(state, timestamp, interval_s, compressor_runtime_s) {
+  simulate_interval(
+    state,
+    timestamp,
+    interval_s,
+    compressor_runtime_s,
+    power_available_override = null
+  ) {
     state = this._check_outage(state, timestamp, interval_s);
 
+    // Either a modeled stochastic outage or a fault that forces power off
+    // leaves the appliance with no usable AC supply this interval.
+    const outage = state.in_outage || power_available_override === false;
+
     let acsv, powered_s;
-    if (state.in_outage) {
+    if (outage) {
       acsv = 0.0;
       powered_s = 0.0;
     } else {
@@ -107,15 +124,15 @@ export class MainsPowerModel {
 
     // ACCD is the AC current (amps) drawn by the appliance, modeled from the
     // compressor duty cycle: a small always-on baseline plus the running
-    // compressor draw scaled by the fraction of the interval it ran. The
-    // interop schema requires ACCD in [0.01, 49.99], so the no-current case
-    // (compressor idle or mains outage) is floored to the schema minimum.
+    // compressor draw scaled by the fraction of the interval it ran. With no
+    // AC supply (mains outage) the appliance draws no current, so ACCD is 0 A
+    // per the PQS E006 DS01.2 Annex-1 ACCD minimum of 0 (Data Format 00.00).
     const duty = interval_s > 0 ? compressor_runtime_s / interval_s : 0.0;
-    let accd = state.in_outage
+    let accd = outage
       ? 0.0
       : this.config.mains_baseline_current_a +
         this.config.mains_compressor_current_a * duty;
-    accd = round2(Math.min(49.99, Math.max(0.01, accd)));
+    accd = round2(Math.min(49.99, Math.max(0.0, accd)));
 
     const readings = {
       SVA: sva,
@@ -181,16 +198,30 @@ export class SolarPowerModel {
 
   /**
    * Compute power readings and update logger battery SOC.
+   * power_available_override mirrors FaultEffects.power_available_override:
+   * when false (e.g. a POWER_OUTAGE fault) power is forced unavailable for this
+   * interval regardless of solar voltage, so the compressor draws no DC current
+   * and the logger battery drains.
+   *
    * @param {PowerState} state
    * @param {Date} timestamp
    * @param {number} interval_s
    * @param {number} compressor_runtime_s
+   * @param {boolean|null} [power_available_override=null]
    * @returns {[PowerState, {DCSV: number, DCCD: number, BLOG: number, BEMD: number}]}
    */
-  simulate_interval(state, timestamp, interval_s, compressor_runtime_s) {
+  simulate_interval(
+    state,
+    timestamp,
+    interval_s,
+    compressor_runtime_s,
+    power_available_override = null
+  ) {
     const dcsv = round1(this._solar_voltage(timestamp));
-    const solar_power_available =
-      dcsv >= this.config.min_operating_voltage;
+    let solar_power_available = dcsv >= this.config.min_operating_voltage;
+    if (power_available_override === false) {
+      solar_power_available = false;
+    }
 
     // Logger battery dynamics (BLOG)
     const hours = interval_s / 3600.0;
@@ -212,12 +243,13 @@ export class SolarPowerModel {
     // DCCD is the DC current (amps) drawn by the compressor, modeled from the
     // compressor duty cycle while solar power is available (an SDD compressor
     // runs directly off the panels, so it draws no DC current without solar).
-    // The interop schema requires DCCD in [0, 99.9].
+    // DCCD range is [0, 99.9]; the PQS E006 DS01.2 Annex-1 Data Format is
+    // '00.0' (1 decimal place), unlike ACCD's '00.00'.
     const duty = interval_s > 0 ? compressor_runtime_s / interval_s : 0.0;
     let dccd = solar_power_available
       ? this.config.solar_compressor_current_a * duty
       : 0.0;
-    dccd = round2(Math.min(99.9, Math.max(0.0, dccd)));
+    dccd = round1(Math.min(99.9, Math.max(0.0, dccd)));
 
     // BLOG/BEMD: estimated DAYS of battery life remaining, scaled from the
     // logger battery state of charge (schema range [0, 9999.9]).
