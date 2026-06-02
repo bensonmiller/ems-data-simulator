@@ -391,3 +391,102 @@ class TestEulerIntegration:
             state_single_direct, tamb=25.0, interval_s=900, compressor_available=False,
         )
         assert state_2.tvc == pytest.approx(final_single.tvc, rel=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# 8. HOLD — holdover autonomy estimate (days), derived from the icebank reserve
+# ---------------------------------------------------------------------------
+
+class TestHoldoverAutonomy:
+    """HOLD is the estimated DAYS the vaccine compartment would stay within
+    +2..+8 C if power were cut (cce-interop PQS-DS01 HOLD: number|null, days,
+    0..999.9, tenths).  It is derived from the remaining icebank reserve and
+    the ambient heat load, reported continuously -- not a seconds-since-power-
+    loss stopwatch (see ccesim-l5u)."""
+
+    @staticmethod
+    def _icebank_config():
+        # Mirror the icebank-equipped ILR/SDD calibration.
+        return ThermalConfig(
+            R=1.63,
+            C=50000.0,
+            R_icebank=0.375,
+            icebank_capacity_j=10_020_000.0 * 0.85,
+            icebank_initial_soc=1.0,
+            compressor_targets_icebank=True,
+        )
+
+    def test_hold_present_during_normal_operation(self):
+        model = ThermalModel(self._icebank_config())
+        state = ThermalState(tvc=5.0, compressor_on=False, icebank_soc=1.0)
+        _, record = model.simulate_interval(
+            state, tamb=28.0, interval_s=900, compressor_available=True,
+        )
+        # HOLD is reported even with power available (not only during outages).
+        assert record["HOLD"] is not None
+        assert record["HOLD"] > 0
+
+    def test_hold_in_days_within_schema_range(self):
+        model = ThermalModel(self._icebank_config())
+        for tamb in (15.0, 24.0, 28.0, 43.0):
+            state = ThermalState(tvc=5.0, compressor_on=False, icebank_soc=1.0)
+            _, record = model.simulate_interval(
+                state, tamb=tamb, interval_s=900, compressor_available=True,
+            )
+            assert 0.0 <= record["HOLD"] <= 999.9
+            # In DAYS: a full icebank at hot ambient is single-digit days,
+            # nowhere near the thousands a seconds-counter would produce.
+            assert record["HOLD"] < 100.0
+
+    def test_hold_rounded_to_tenths(self):
+        model = ThermalModel(self._icebank_config())
+        state = ThermalState(tvc=5.0, compressor_on=False, icebank_soc=0.73)
+        _, record = model.simulate_interval(
+            state, tamb=31.0, interval_s=900, compressor_available=True,
+        )
+        assert record["HOLD"] == round(record["HOLD"], 1)
+
+    def test_hold_declines_with_reserve(self):
+        model = ThermalModel(self._icebank_config())
+        _, rec_full = model.simulate_interval(
+            ThermalState(tvc=5.0, compressor_on=False, icebank_soc=1.0),
+            tamb=28.0, interval_s=900, compressor_available=True,
+        )
+        _, rec_low = model.simulate_interval(
+            ThermalState(tvc=5.0, compressor_on=False, icebank_soc=0.25),
+            tamb=28.0, interval_s=900, compressor_available=True,
+        )
+        # Lower reserve -> shorter autonomy.
+        assert rec_low["HOLD"] < rec_full["HOLD"]
+
+    def test_hold_lower_at_hotter_ambient(self):
+        model = ThermalModel(self._icebank_config())
+        _, rec_cool = model.simulate_interval(
+            ThermalState(tvc=5.0, compressor_on=False, icebank_soc=1.0),
+            tamb=24.0, interval_s=900, compressor_available=True,
+        )
+        _, rec_hot = model.simulate_interval(
+            ThermalState(tvc=5.0, compressor_on=False, icebank_soc=1.0),
+            tamb=43.0, interval_s=900, compressor_available=True,
+        )
+        # Greater ambient heat load melts ice faster -> less autonomy.
+        assert rec_hot["HOLD"] < rec_cool["HOLD"]
+
+    def test_hold_bounded_at_schema_max(self):
+        model = ThermalModel(self._icebank_config())
+        # Ambient at/below icebank melt temperature -> no net melt; capped.
+        _, record = model.simulate_interval(
+            ThermalState(tvc=2.0, compressor_on=False, icebank_soc=1.0),
+            tamb=-5.0, interval_s=900, compressor_available=False,
+        )
+        assert record["HOLD"] == 999.9
+
+    def test_hold_null_without_icebank(self):
+        # Default config has icebank_capacity_j == 0 (passive thermal mass);
+        # there is no meaningful holdover store, so HOLD is null.
+        model = ThermalModel(ThermalConfig())
+        _, record = model.simulate_interval(
+            ThermalState(tvc=5.0, compressor_on=False),
+            tamb=28.0, interval_s=900, compressor_available=True,
+        )
+        assert record["HOLD"] is None

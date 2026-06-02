@@ -359,8 +359,11 @@ def default_config(power_type: str = "mains", latitude: Optional[float] = None) 
             T_setpoint_low=2.0,
             T_setpoint_high=5.0,
             initial_tvc=4.0,
-            # Icebank: 30 kg ice × 334 kJ/kg = 10,020,000 J.
-            # Holdover: ~5.4 days at +43 °C, ~10 days at +24 °C.
+            # Icebank: 30 kg ice × 334 kJ/kg = 10,020,000 J nominal.
+            # Nominal holdover: ~5.4 days at +43 °C, ~10 days at +24 °C.
+            # The reported HOLD field uses the 85%-usable reserve below
+            # (and the R_wall+R_icebank series leak), so it reads modestly
+            # lower: ~4.6 days at +43 °C, ~8.2 days at +24 °C.
             icebank_capacity_j=10_020_000.0 * 0.85, # Assume 85% usable capacity to account for inefficiencies and non-idealities.
             icebank_initial_soc=1.0,
             R_icebank=0.375,     # Chamber-to-icebank coupling (K/W)
@@ -378,8 +381,11 @@ def default_config(power_type: str = "mains", latitude: Optional[float] = None) 
             T_setpoint_low=2.0,
             T_setpoint_high=8.0,
             initial_tvc=5.0,
-            # Icebank: 30 kg ice × 334 kJ/kg = 10,020,000 J.
-            # Holdover: ~5.4 days at +43 °C, ~10 days at +24 °C.
+            # Icebank: 30 kg ice × 334 kJ/kg = 10,020,000 J nominal.
+            # Nominal holdover: ~5.4 days at +43 °C, ~10 days at +24 °C.
+            # The reported HOLD field uses the 85%-usable reserve below
+            # (and the R_wall+R_icebank series leak), so it reads modestly
+            # lower: ~4.6 days at +43 °C, ~8.2 days at +24 °C.
             icebank_capacity_j=10_020_000.0 * 0.85, # Assume 85% usable capacity to account for inefficiencies and non-idealities.
             icebank_initial_soc=1.0,
             R_icebank=0.375,     # Chamber-to-icebank coupling (K/W)

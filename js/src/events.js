@@ -322,7 +322,12 @@ export class AlarmGenerator {
   }
 
   /**
-   * Compute ALRM, HOLD, EERR, and LERR fields.
+   * Compute ALRM, EERR, and LERR fields.
+   *
+   * HOLD (holdover autonomy) is NOT derived here. It is a thermal-reserve
+   * estimate reported continuously, computed by the thermal model from the
+   * icebank reserve -- not a power-outage stopwatch keyed off
+   * power_available.
    *
    * @param {Object} opts
    * @param {number} opts.tvc - Current vaccine chamber temperature.
@@ -330,10 +335,10 @@ export class AlarmGenerator {
    * @param {Date} opts.timestamp - Current timestamp.
    * @param {DoorEvent[]|null} [opts.door_events=null] - Sub-interval door events.
    * @param {number} [opts.interval_s=900.0] - Length of the sample interval in seconds.
-   * @returns {{ALRM: string|null, HOLD: number|null, EERR: string|null, LERR: string|null}}
+   * @returns {{ALRM: string|null, EERR: string|null, LERR: string|null}}
    */
   deriveAlarms({ tvc, power_available, timestamp, door_events = null, interval_s = 900.0 }) {
-    // Track power loss for HOLD calculation
+    // Track power loss for the POWR continuous-outage alarm.
     if (!power_available && this._powerWasAvailable) {
       this._lastPowerLoss = timestamp;
     }
@@ -387,15 +392,6 @@ export class AlarmGenerator {
       }
     }
 
-    // HOLD: seconds since power loss (holdover time)
-    let hold = null;
-    if (this._lastPowerLoss !== null) {
-      hold =
-        Math.round(
-          ((timestamp.getTime() - this._lastPowerLoss.getTime()) / 1000) * 10,
-        ) / 10;
-    }
-
     // EERR: random low-probability EMD error code
     let eerr = null;
     if (this.rng.random() < 0.001) {
@@ -419,7 +415,6 @@ export class AlarmGenerator {
 
     return {
       ALRM: codes.length > 0 ? codes.join(" ") : null,
-      HOLD: hold,
       EERR: eerr,
       LERR: lerr,
     };

@@ -21,11 +21,11 @@ SimulationConfig
 
 SimulatedRecordSet.generate(config, batch_size, start_time)
     ├── AmbientModel       → TAMB (sinusoidal + noise)
-    ├── ThermalModel       → TVC, CMPR, DORV (RC circuit + thermostat)
+    ├── ThermalModel       → TVC, CMPR, DORV, HOLD (RC circuit + thermostat + icebank reserve)
     ├── PowerModel         → SVA/ACCD/ACSV or DCSV/DCCD/BLOG
     ├── DoorEventGenerator → door openings (Poisson process)
     ├── FaultInjector      → fault effects on thermal/power
-    └── AlarmGenerator     → ALRM, HOLD, EERR
+    └── AlarmGenerator     → ALRM, EERR, LERR
 ```
 
 ## Thermal model

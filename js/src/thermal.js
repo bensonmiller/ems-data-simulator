@@ -107,6 +107,12 @@ export class AmbientModel {
  * When C_air = 0, falls back to the legacy single-node model.
  */
 export class ThermalModel {
+  // Icebank latent-melt temperature (C). Phase-change holds near 0 C
+  // while ice remains, which is what bounds the vaccine compartment.
+  static HOLD_T_ICE = 0.0;
+  // Schema bound for HOLD (cce-interop PQS-DS01 HOLD: 0..999.9 days).
+  static HOLD_MAX_DAYS = 999.9;
+
   /**
    * @param {object} config - Thermal configuration object.
    */
@@ -118,6 +124,48 @@ export class ThermalModel {
       this._cAir = this.config.C_air;
       this._cContents = this.config.C - this.config.C_air;
     }
+  }
+
+  /**
+   * Estimate holdover autonomy in DAYS from the thermal reserve.
+   *
+   * HOLD denotes how long the vaccine compartment would stay within
+   * +2..+8 C if supply power were disconnected -- a near-steady
+   * capability of the appliance, reported continuously (not a
+   * power-outage stopwatch). It is modeled as the remaining icebank
+   * latent reserve divided by the steady ambient heat-leak rate; the
+   * icebank melts near 0 C while ice remains:
+   *
+   *     t_holdover = E_reserve / Q_leak
+   *     E_reserve  = icebank_capacity_j * icebankSoc          [J]
+   *     Q_leak     = (TAMB - T_ice) / (R_wall + R_icebank)    [W]
+   *
+   * Returns days bounded to the schema range [0, 999.9] at tenths
+   * precision, or null for appliances with no icebank reserve.
+   *
+   * @param {number} tamb - Ambient temperature (C).
+   * @param {number} icebankSoc - Icebank state of charge (0-1).
+   * @returns {number|null} Holdover autonomy in days, or null.
+   */
+  _holdoverDays(tamb, icebankSoc) {
+    const cfg = this.config;
+    if (cfg.icebank_capacity_j <= 0) {
+      return null;
+    }
+    const rTotal = cfg.R + cfg.R_icebank;
+    const delta = tamb - ThermalModel.HOLD_T_ICE;
+    if (delta <= 0 || rTotal <= 0) {
+      // Ambient at/below the icebank temperature: no net melt, so the
+      // reserve is effectively unbounded -- cap at the schema maximum.
+      return ThermalModel.HOLD_MAX_DAYS;
+    }
+    const qLeak = delta / rTotal;
+    const eReserve = cfg.icebank_capacity_j * Math.max(0.0, icebankSoc);
+    const days = eReserve / qLeak / 86400.0;
+    return (
+      Math.round(Math.min(ThermalModel.HOLD_MAX_DAYS, Math.max(0.0, days)) * 10) /
+      10
+    );
   }
 
   /**
@@ -310,6 +358,7 @@ export class ThermalModel {
         ? Math.round(icebankSoc * 10000) / 10000
         : null,
       TRBCM: trbcm !== null ? Math.round(trbcm * 10) / 10 : null,
+      HOLD: this._holdoverDays(tamb, icebankSoc),
     };
 
     const newState = new ThermalState({

@@ -405,7 +405,7 @@ describe("Behavioral equivalence", () => {
     });
   });
 
-  // -- power_outage: CMPR=0, HOLD increases, TVC eventually drifts --
+  // -- power_outage: CMPR=0, icebank reserve drains, TVC eventually drifts --
   describe("power_outage", () => {
     let jsResult;
 
@@ -422,14 +422,26 @@ describe("Behavioral equivalence", () => {
       }
     });
 
-    it("HOLD increases over time", () => {
-      // HOLD tracks seconds since power loss
-      const holds = jsResult.records.map((r) => r.HOLD).filter((h) => h !== null);
+    it("HOLD is a days-scale holdover estimate, not a seconds counter", () => {
+      // HOLD is holdover autonomy in DAYS (cce-interop range 0..999.9),
+      // derived from the icebank reserve -- reported continuously, NOT a
+      // seconds-since-power-loss stopwatch (see ccesim-l5u).
+      const holds = jsResult.records.map((r) => r.HOLD);
       expect(holds.length).toBeGreaterThan(0);
-      // Should be monotonically increasing
-      for (let i = 1; i < holds.length; i++) {
-        expect(holds[i]).toBeGreaterThanOrEqual(holds[i - 1]);
+      for (const h of holds) {
+        expect(h).not.toBeNull(); // icebank present -> always reported
+        expect(h).toBeGreaterThanOrEqual(0);
+        expect(h).toBeLessThanOrEqual(999.9);
+        // Single-digit days for a charged icebank -- nowhere near the
+        // thousands the old seconds counter produced within minutes.
+        expect(h).toBeLessThan(100);
       }
+      // The monotonic invariant during an outage is the icebank reserve,
+      // not HOLD itself: HOLD also tracks diurnal ambient (cooler nights
+      // raise autonomy), so it can rise even as ice depletes. Assert the
+      // reserve drains.
+      const ice = jsResult.records.map((r) => r.ICESOC);
+      expect(ice[ice.length - 1]).toBeLessThan(ice[0]);
     });
 
     it("TVC stays relatively stable due to icebank thermal mass", () => {

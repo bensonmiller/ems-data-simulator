@@ -102,6 +102,44 @@ class ThermalModel:
             self._c_air = config.C_air
             self._c_contents = config.C - config.C_air
 
+    # Icebank latent-melt temperature (°C). Phase-change holds near 0 °C
+    # while ice remains, which is what bounds the vaccine compartment.
+    HOLD_T_ICE = 0.0
+    # Schema bound for HOLD (cce-interop PQS-DS01 HOLD: 0..999.9 days).
+    HOLD_MAX_DAYS = 999.9
+
+    def _holdover_days(self, tamb: float, icebank_soc: float) -> Optional[float]:
+        """Estimate holdover autonomy in DAYS from the thermal reserve.
+
+        HOLD denotes how long the vaccine compartment would stay within
+        +2..+8 °C if supply power were disconnected -- a near-steady
+        capability of the appliance, reported continuously (not a
+        power-outage stopwatch).  It is modeled as the remaining icebank
+        latent reserve divided by the steady ambient heat-leak rate; the
+        icebank melts near 0 °C while ice remains:
+
+            t_holdover = E_reserve / Q_leak
+            E_reserve  = icebank_capacity_j * icebank_soc          [J]
+            Q_leak     = (TAMB - T_ice) / (R_wall + R_icebank)     [W]
+
+        Returns days bounded to the schema range [0, 999.9] at tenths
+        precision, or None for appliances with no icebank reserve (passive
+        thermal mass is not a meaningful holdover store).
+        """
+        cfg = self.config
+        if cfg.icebank_capacity_j <= 0:
+            return None
+        r_total = cfg.R + cfg.R_icebank
+        delta = tamb - self.HOLD_T_ICE
+        if delta <= 0 or r_total <= 0:
+            # Ambient at/below the icebank temperature: no net melt, so the
+            # reserve is effectively unbounded -- cap at the schema maximum.
+            return self.HOLD_MAX_DAYS
+        q_leak = delta / r_total
+        e_reserve = cfg.icebank_capacity_j * max(0.0, icebank_soc)
+        days = (e_reserve / q_leak) / 86400.0
+        return round(min(self.HOLD_MAX_DAYS, max(0.0, days)), 1)
+
     def simulate_interval(
         self,
         state: ThermalState,
@@ -293,6 +331,7 @@ class ThermalModel:
             'DORV': int(dorv_seconds),
             'ICESOC': round(icebank_soc, 4) if has_icebank else None,
             'TRBCM': round(trbcm, 1) if trbcm is not None else None,
+            'HOLD': self._holdover_days(tamb, icebank_soc),
         }
 
         new_state = ThermalState(

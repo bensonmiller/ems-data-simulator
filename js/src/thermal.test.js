@@ -618,3 +618,118 @@ describe("side-by-side Python validation", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// 8. HOLD — holdover autonomy estimate (days), derived from the icebank reserve
+// ---------------------------------------------------------------------------
+
+// HOLD is the estimated DAYS the vaccine compartment would stay within
+// +2..+8 C if power were cut (cce-interop PQS-DS01 HOLD: number|null, days,
+// 0..999.9, tenths). Derived from the remaining icebank reserve and the
+// ambient heat load, reported continuously -- not a seconds-since-power-loss
+// stopwatch (see ccesim-l5u).
+describe("HOLD holdover autonomy", () => {
+  const icebankConfig = {
+    R: 1.63,
+    C: 50000.0,
+    R_icebank: 0.375,
+    icebank_capacity_j: 10_020_000.0 * 0.85,
+    compressor_targets_icebank: true,
+  };
+
+  it("HOLD present during normal operation", () => {
+    const model = defaultModel(icebankConfig);
+    const [, record] = model.simulateInterval(
+      state({ tvc: 5.0, icebankSoc: 1.0 }),
+      28.0,
+      900,
+      true
+    );
+    expect(record.HOLD).not.toBeNull();
+    expect(record.HOLD).toBeGreaterThan(0);
+  });
+
+  it("HOLD in days within schema range", () => {
+    const model = defaultModel(icebankConfig);
+    for (const tamb of [15.0, 24.0, 28.0, 43.0]) {
+      const [, record] = model.simulateInterval(
+        state({ tvc: 5.0, icebankSoc: 1.0 }),
+        tamb,
+        900,
+        true
+      );
+      expect(record.HOLD).toBeGreaterThanOrEqual(0.0);
+      expect(record.HOLD).toBeLessThanOrEqual(999.9);
+      expect(record.HOLD).toBeLessThan(100.0);
+    }
+  });
+
+  it("HOLD rounded to tenths", () => {
+    const model = defaultModel(icebankConfig);
+    const [, record] = model.simulateInterval(
+      state({ tvc: 5.0, icebankSoc: 0.73 }),
+      31.0,
+      900,
+      true
+    );
+    expect(record.HOLD).toBe(Math.round(record.HOLD * 10) / 10);
+  });
+
+  it("HOLD declines with reserve", () => {
+    const model = defaultModel(icebankConfig);
+    const [, recFull] = model.simulateInterval(
+      state({ tvc: 5.0, icebankSoc: 1.0 }),
+      28.0,
+      900,
+      true
+    );
+    const [, recLow] = model.simulateInterval(
+      state({ tvc: 5.0, icebankSoc: 0.25 }),
+      28.0,
+      900,
+      true
+    );
+    expect(recLow.HOLD).toBeLessThan(recFull.HOLD);
+  });
+
+  it("HOLD lower at hotter ambient", () => {
+    const model = defaultModel(icebankConfig);
+    const [, recCool] = model.simulateInterval(
+      state({ tvc: 5.0, icebankSoc: 1.0 }),
+      24.0,
+      900,
+      true
+    );
+    const [, recHot] = model.simulateInterval(
+      state({ tvc: 5.0, icebankSoc: 1.0 }),
+      43.0,
+      900,
+      true
+    );
+    expect(recHot.HOLD).toBeLessThan(recCool.HOLD);
+  });
+
+  it("HOLD bounded at schema max when ambient at/below icebank temp", () => {
+    const model = defaultModel(icebankConfig);
+    const [, record] = model.simulateInterval(
+      state({ tvc: 2.0, icebankSoc: 1.0 }),
+      -5.0,
+      900,
+      false
+    );
+    expect(record.HOLD).toBe(999.9);
+  });
+
+  it("HOLD null without icebank", () => {
+    // Default config has icebank_capacity_j == 0 (passive thermal mass);
+    // no meaningful holdover store, so HOLD is null.
+    const model = defaultModel();
+    const [, record] = model.simulateInterval(
+      state({ tvc: 5.0 }),
+      28.0,
+      900,
+      true
+    );
+    expect(record.HOLD).toBeNull();
+  });
+});

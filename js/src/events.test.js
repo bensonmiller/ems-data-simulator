@@ -714,60 +714,27 @@ describe("Multi-code ALRM", () => {
 });
 
 // ===================================================================
-// 6. HOLD tracking during power loss
+// 6. HOLD is not an alarm-layer field
 // ===================================================================
 
-describe("HOLD tracking", () => {
-  it("HOLD null when power available", () => {
+// HOLD is a thermal-reserve estimate emitted by the thermal model, NOT a
+// power-outage stopwatch in the alarm layer. deriveAlarms must not emit
+// HOLD regardless of power availability (see ccesim-l5u).
+describe("HOLD not in alarms", () => {
+  it("HOLD absent when power available", () => {
     const ag = new AlarmGenerator(makeRng(1));
     const result = ag.deriveAlarms({ tvc: 5.0, power_available: true, timestamp: SIM_START });
-    expect(result.HOLD).toBe(null);
+    expect("HOLD" in result).toBe(false);
   });
 
-  it("HOLD starts at zero on power loss", () => {
+  it("HOLD absent during outage", () => {
     const ag = new AlarmGenerator(makeRng(1));
     const t0 = SIM_START;
     ag.deriveAlarms({ tvc: 5.0, power_available: true, timestamp: t0 });
-    const t1 = addSeconds(t0, 100);
+    const t1 = addSeconds(t0, 900);
     const result = ag.deriveAlarms({ tvc: 5.0, power_available: false, timestamp: t1 });
-    expect(result.HOLD).toBe(0.0);
-  });
-
-  it("HOLD increments during outage", () => {
-    const ag = new AlarmGenerator(makeRng(1));
-    const t0 = SIM_START;
-    ag.deriveAlarms({ tvc: 5.0, power_available: true, timestamp: t0 });
-    const t1 = addSeconds(t0, 100);
-    ag.deriveAlarms({ tvc: 5.0, power_available: false, timestamp: t1 });
-    const t2 = addSeconds(t1, 300);
-    const result = ag.deriveAlarms({ tvc: 5.0, power_available: false, timestamp: t2 });
-    expect(result.HOLD).toBe(300.0);
-  });
-
-  it("HOLD resets when power restored", () => {
-    const ag = new AlarmGenerator(makeRng(1));
-    const t0 = SIM_START;
-    ag.deriveAlarms({ tvc: 5.0, power_available: true, timestamp: t0 });
-    const t1 = addSeconds(t0, 100);
-    ag.deriveAlarms({ tvc: 5.0, power_available: false, timestamp: t1 });
-    const t2 = addSeconds(t1, 500);
-    const result = ag.deriveAlarms({ tvc: 5.0, power_available: true, timestamp: t2 });
-    expect(result.HOLD).toBe(null);
-  });
-
-  it("HOLD tracks second outage independently", () => {
-    const ag = new AlarmGenerator(makeRng(1));
-    const t0 = SIM_START;
-    ag.deriveAlarms({ tvc: 5.0, power_available: true, timestamp: t0 });
-    const t1 = addSeconds(t0, 100);
-    ag.deriveAlarms({ tvc: 5.0, power_available: false, timestamp: t1 });
-    const t2 = addSeconds(t1, 500);
-    ag.deriveAlarms({ tvc: 5.0, power_available: true, timestamp: t2 });
-    const t3 = addSeconds(t2, 200);
-    ag.deriveAlarms({ tvc: 5.0, power_available: false, timestamp: t3 });
-    const t4 = addSeconds(t3, 60);
-    const result = ag.deriveAlarms({ tvc: 5.0, power_available: false, timestamp: t4 });
-    expect(result.HOLD).toBe(60.0);
+    expect("HOLD" in result).toBe(false);
+    expect(Object.keys(result).sort()).toEqual(["ALRM", "EERR", "LERR"]);
   });
 });
 

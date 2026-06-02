@@ -655,68 +655,28 @@ class TestMultiCodeAlarm:
 
 
 # ===================================================================
-# 6. HOLD tracking during power loss
+# 6. HOLD is not an alarm-layer field
 # ===================================================================
 
-class TestHoldTracking:
-    """HOLD should track seconds since power was lost."""
+class TestHoldNotInAlarms:
+    """HOLD is a thermal-reserve estimate emitted by the thermal model,
+    NOT a power-outage stopwatch in the alarm layer.  derive_alarms must
+    not emit HOLD regardless of power availability (see ccesim-l5u)."""
 
-    def test_hold_none_when_power_available(self):
+    def test_hold_absent_when_power_available(self):
         ag = AlarmGenerator(_make_rng(seed=1))
         result = ag.derive_alarms(tvc=5.0, power_available=True, timestamp=SIM_START)
-        assert result['HOLD'] is None
+        assert 'HOLD' not in result
 
-    def test_hold_starts_at_zero_on_power_loss(self):
+    def test_hold_absent_during_outage(self):
         ag = AlarmGenerator(_make_rng(seed=1))
         t0 = SIM_START
-        # First call with power on to establish state
         ag.derive_alarms(tvc=5.0, power_available=True, timestamp=t0)
-        # Power goes out
-        t1 = t0 + dt.timedelta(seconds=100)
+        t1 = t0 + dt.timedelta(seconds=900)
         result = ag.derive_alarms(tvc=5.0, power_available=False, timestamp=t1)
-        assert result['HOLD'] == 0.0
-
-    def test_hold_increments_during_outage(self):
-        ag = AlarmGenerator(_make_rng(seed=1))
-        t0 = SIM_START
-        ag.derive_alarms(tvc=5.0, power_available=True, timestamp=t0)
-        # Power loss
-        t1 = t0 + dt.timedelta(seconds=100)
-        ag.derive_alarms(tvc=5.0, power_available=False, timestamp=t1)
-        # 300 seconds later, still no power
-        t2 = t1 + dt.timedelta(seconds=300)
-        result = ag.derive_alarms(tvc=5.0, power_available=False, timestamp=t2)
-        assert result['HOLD'] == 300.0
-
-    def test_hold_resets_when_power_restored(self):
-        ag = AlarmGenerator(_make_rng(seed=1))
-        t0 = SIM_START
-        ag.derive_alarms(tvc=5.0, power_available=True, timestamp=t0)
-        # Power loss
-        t1 = t0 + dt.timedelta(seconds=100)
-        ag.derive_alarms(tvc=5.0, power_available=False, timestamp=t1)
-        # Power restored
-        t2 = t1 + dt.timedelta(seconds=500)
-        result = ag.derive_alarms(tvc=5.0, power_available=True, timestamp=t2)
-        assert result['HOLD'] is None
-
-    def test_hold_tracks_second_outage_independently(self):
-        ag = AlarmGenerator(_make_rng(seed=1))
-        t0 = SIM_START
-        ag.derive_alarms(tvc=5.0, power_available=True, timestamp=t0)
-        # First outage
-        t1 = t0 + dt.timedelta(seconds=100)
-        ag.derive_alarms(tvc=5.0, power_available=False, timestamp=t1)
-        # Restore
-        t2 = t1 + dt.timedelta(seconds=500)
-        ag.derive_alarms(tvc=5.0, power_available=True, timestamp=t2)
-        # Second outage
-        t3 = t2 + dt.timedelta(seconds=200)
-        ag.derive_alarms(tvc=5.0, power_available=False, timestamp=t3)
-        # 60 seconds into second outage
-        t4 = t3 + dt.timedelta(seconds=60)
-        result = ag.derive_alarms(tvc=5.0, power_available=False, timestamp=t4)
-        assert result['HOLD'] == 60.0
+        # No HOLD key, and outage tracking is retained only for POWR.
+        assert 'HOLD' not in result
+        assert set(result.keys()) == {'ALRM', 'EERR', 'LERR'}
 
 
 # ===================================================================

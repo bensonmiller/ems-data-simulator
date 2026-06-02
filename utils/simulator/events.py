@@ -268,7 +268,7 @@ class AlarmGenerator:
         door_events: Optional[List[DoorEvent]] = None,
         interval_s: float = 900.0,
     ) -> dict:
-        """Compute ALRM, HOLD, EERR, and LERR fields.
+        """Compute ALRM, EERR, and LERR fields.
 
         Args:
             tvc: Current vaccine chamber temperature.
@@ -278,12 +278,17 @@ class AlarmGenerator:
             interval_s: Length of the sample interval in seconds.
 
         Returns:
-            Dict with ALRM, HOLD, EERR, LERR keys.  ALRM is a space-separated
+            Dict with ALRM, EERR, LERR keys.  ALRM is a space-separated
             string of all active alarm codes, or None if no alarms are active.
             EERR (EMD error codes) and LERR (logger error codes) are distinct
             manufacturer-defined fields and are drawn independently.
+
+        Note: HOLD (holdover autonomy) is NOT derived here.  It is a
+        thermal-reserve estimate reported continuously, computed by the
+        thermal model from the icebank reserve -- not a power-outage
+        stopwatch keyed off ``power_available``.
         """
-        # Track power loss for HOLD calculation
+        # Track power loss for the POWR continuous-outage alarm.
         if not power_available and self._power_was_available:
             self._last_power_loss = timestamp
         if power_available:
@@ -323,11 +328,6 @@ class AlarmGenerator:
             if power_elapsed >= self.POWR_THRESHOLD_S:
                 codes.append("POWR")
 
-        # HOLD: seconds since power loss (holdover time)
-        hold = None
-        if self._last_power_loss is not None:
-            hold = round((timestamp - self._last_power_loss).total_seconds(), 1)
-
         # EERR: random low-probability EMD error code
         eerr = None
         if self.rng.random() < 0.001:
@@ -341,7 +341,6 @@ class AlarmGenerator:
 
         return {
             'ALRM': ' '.join(codes) if codes else None,
-            'HOLD': hold,
             'EERR': eerr,
             'LERR': lerr,
         }
