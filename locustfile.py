@@ -24,6 +24,10 @@ SIM_START = environ.get('SIM_START', '2024-06-15T00:00:00')
 # Max per-user jitter applied to the start time (seconds).
 START_JITTER_S = int(environ.get('START_JITTER_S', 3600))
 
+# Path on TARGET_HOST that reports are POSTed to (the ingestion endpoint).
+# Override to match whatever ingestion service you point at.
+INGEST_PATH = environ.get('INGEST_PATH', '/')
+
 
 class CceDevice(HttpUser):
     """
@@ -83,7 +87,6 @@ class CceDevice(HttpUser):
             return
 
         report = self.report_queue.popleft()
-        workflow_id = environ.get('OPENFN_WORKFLOW_ID')
 
         md = transfer_metadata(type=self.device_type)
         tx = self.transfer_schema(
@@ -91,7 +94,7 @@ class CceDevice(HttpUser):
             meta=TransferMetadata(**md),
         )
         body = tx.model_dump(mode='json', exclude_unset=True)
-        self.client.post(f'/{workflow_id}', json=body)
+        self.client.post(INGEST_PATH, json=body)
 
 
 # ---------------------------------------------------------------------------

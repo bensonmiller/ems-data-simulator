@@ -146,7 +146,7 @@ config = SimulationConfig(
 
 ## Locust load testing
 
-The `locustfile.py` integrates the simulator with [Locust](https://locust.io/) for load testing OpenFn endpoints. Each Locust user represents a single CCE device sending a pre-generated series of CCDX-formatted reports.
+The `locustfile.py` integrates the simulator with [Locust](https://locust.io/) for load testing a CCE data ingestion endpoint. Each Locust user represents a single CCE device sending a pre-generated series of CCDX-formatted reports.
 
 During startup, each virtual user creates a `BaseRtmDevice`, pre-generates a queue of sequential reports, then POSTs them one at a time. State carries over between reports for physical continuity. Load volume comes from spawning many users (each a distinct device), not from time compression.
 
@@ -154,8 +154,8 @@ During startup, each virtual user creates a `BaseRtmDevice`, pre-generates a que
 
 | Environment variable | Default | Description |
 |---|---|---|
-| `TARGET_HOST` | `http://localhost:8001` | Base URL for the OpenFn endpoint |
-| `OPENFN_WORKFLOW_ID` | _(required)_ | Workflow ID appended to the POST path |
+| `TARGET_HOST` | `http://localhost:8001` | Base URL of the ingestion endpoint |
+| `INGEST_PATH` | `/` | Path on `TARGET_HOST` that reports are POSTed to |
 | `NUM_REPORTS` | `168` | Reports per device (168 = one week at 1h intervals) |
 | `SIM_START` | `2024-06-15T00:00:00` | Simulated start date (ISO 8601) |
 | `START_JITTER_S` | `3600` | Max random offset per user's start time |
@@ -164,14 +164,14 @@ During startup, each virtual user creates a `BaseRtmDevice`, pre-generates a que
 
 ```bash
 # 100 virtual devices, ramping 5 users/second
-export OPENFN_WORKFLOW_ID="your-workflow-id"
+export INGEST_PATH="/your/ingest/path"
 locust -f locustfile.py --headless -u 100 -r 5
 
 # 30 days of data per device
 NUM_REPORTS=720 locust -f locustfile.py --headless -u 50 -r 10
 
 # Remote endpoint with custom start date
-TARGET_HOST=https://app.openfn.org SIM_START=2025-01-01T00:00:00 \
+TARGET_HOST=https://ingest.example.org SIM_START=2025-01-01T00:00:00 \
   locust -f locustfile.py --headless -u 500 -r 20
 ```
 
