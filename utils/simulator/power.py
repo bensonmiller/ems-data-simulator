@@ -18,7 +18,8 @@ from utils.simulator.config import PowerConfig
 class PowerState:
     """Mutable power system state carried between intervals.
 
-    cumulative_powered_s: Total seconds with power available (ACCD or DCCD).
+    cumulative_powered_s: Total seconds with power available (tracked for
+        state continuity across intervals; not emitted directly).
     battery_soc: State of charge for the logger battery (0.0 to 1.0).
         For SDD fridges this is the small backup battery that powers the
         data logger, NOT a battery for the compressor.
@@ -80,9 +81,21 @@ class MainsPowerModel:
 
         state.cumulative_powered_s += powered_s
 
+        # ACCD is the AC current (amps) drawn by the appliance, modeled from the
+        # compressor duty cycle: a small always-on baseline plus the running
+        # compressor draw scaled by the fraction of the interval it ran. The
+        # interop schema requires ACCD in [0.01, 49.99], so the no-current case
+        # (compressor idle or mains outage) is floored to the schema minimum.
+        duty = compressor_runtime_s / interval_s if interval_s > 0 else 0.0
+        accd = 0.0 if state.in_outage else (
+            self.config.mains_baseline_current_a
+            + self.config.mains_compressor_current_a * duty
+        )
+        accd = round(min(49.99, max(0.01, accd)), 2)
+
         readings = {
             'SVA': sva,
-            'ACCD': round(powered_s, 1),
+            'ACCD': accd,
             'ACSV': round(acsv, 1),
         }
         return state, readings
@@ -150,16 +163,23 @@ class SolarPowerModel:
 
         state.battery_soc = max(0.0, min(1.0, state.battery_soc))
 
-        # DCCD: cumulative seconds with DC power available to the compressor
         powered_s = interval_s if solar_power_available else 0.0
         state.cumulative_powered_s += powered_s
+
+        # DCCD is the DC current (amps) drawn by the compressor, modeled from the
+        # compressor duty cycle while solar power is available (an SDD compressor
+        # runs directly off the panels, so it draws no DC current without solar).
+        # The interop schema requires DCCD in [0, 99.9].
+        duty = compressor_runtime_s / interval_s if interval_s > 0 else 0.0
+        dccd = self.config.solar_compressor_current_a * duty if solar_power_available else 0.0
+        dccd = round(min(99.9, max(0.0, dccd)), 2)
 
         # BLOG/BEMD: logger battery voltage mapped from SOC
         blog = round(self.config.blog_voltage_empty + state.battery_soc * self.config.blog_voltage_range, 1)
 
         readings = {
             'DCSV': dcsv,
-            'DCCD': round(powered_s, 1),
+            'DCCD': dccd,
             'BLOG': blog,
             'BEMD': blog,
         }

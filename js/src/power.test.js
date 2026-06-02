@@ -59,12 +59,28 @@ describe("MainsPowerModel.simulate_interval", () => {
     expect(readings.SVA).toBe(600);
   });
 
-  it("ACCD equals interval when no outage", () => {
-    const model = new MainsPowerModel(mainsConfig(), new SeededRandom(42));
+  it("ACCD is baseline current when compressor idle", () => {
+    const cfg = mainsConfig();
+    const model = new MainsPowerModel(cfg, new SeededRandom(42));
     let state = new PowerState();
     let readings;
+    // Compressor idle for the whole interval -> only the baseline draw.
     [state, readings] = model.simulate_interval(state, NOON, INTERVAL, 0.0);
-    expect(readings.ACCD).toBe(INTERVAL);
+    expect(readings.ACCD).toBeCloseTo(cfg.mains_baseline_current_a, 5);
+  });
+
+  it("ACCD scales with compressor duty cycle", () => {
+    const cfg = mainsConfig();
+    const model = new MainsPowerModel(cfg, new SeededRandom(42));
+    let state = new PowerState();
+    let readings;
+    // Compressor runs the full interval -> baseline + full running draw.
+    [state, readings] = model.simulate_interval(state, NOON, INTERVAL, INTERVAL);
+    const expected =
+      cfg.mains_baseline_current_a + cfg.mains_compressor_current_a;
+    expect(readings.ACCD).toBeCloseTo(expected, 5);
+    expect(readings.ACCD).toBeGreaterThanOrEqual(0.01);
+    expect(readings.ACCD).toBeLessThanOrEqual(49.99);
   });
 
   it("ACSV near nominal voltage", () => {
@@ -87,7 +103,8 @@ describe("MainsPowerModel outage behavior", () => {
     });
     const [, readings] = model.simulate_interval(state, NOON, INTERVAL, 0.0);
     expect(readings.SVA).toBe(0);
-    expect(readings.ACCD).toBe(0.0);
+    // No AC current during an outage, floored to the schema minimum (0.01).
+    expect(readings.ACCD).toBe(0.01);
     expect(readings.ACSV).toBe(0.0);
   });
 

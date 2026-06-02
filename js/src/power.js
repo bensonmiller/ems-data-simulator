@@ -101,9 +101,21 @@ export class MainsPowerModel {
 
     state.cumulative_powered_s += powered_s;
 
+    // ACCD is the AC current (amps) drawn by the appliance, modeled from the
+    // compressor duty cycle: a small always-on baseline plus the running
+    // compressor draw scaled by the fraction of the interval it ran. The
+    // interop schema requires ACCD in [0.01, 49.99], so the no-current case
+    // (compressor idle or mains outage) is floored to the schema minimum.
+    const duty = interval_s > 0 ? compressor_runtime_s / interval_s : 0.0;
+    let accd = state.in_outage
+      ? 0.0
+      : this.config.mains_baseline_current_a +
+        this.config.mains_compressor_current_a * duty;
+    accd = round2(Math.min(49.99, Math.max(0.01, accd)));
+
     const readings = {
       SVA: sva,
-      ACCD: round1(powered_s),
+      ACCD: accd,
       ACSV: round1(acsv),
     };
     return [state, readings];
@@ -190,9 +202,18 @@ export class SolarPowerModel {
 
     state.battery_soc = Math.max(0.0, Math.min(1.0, state.battery_soc));
 
-    // DCCD: cumulative seconds with DC power available to the compressor
     const powered_s = solar_power_available ? interval_s : 0.0;
     state.cumulative_powered_s += powered_s;
+
+    // DCCD is the DC current (amps) drawn by the compressor, modeled from the
+    // compressor duty cycle while solar power is available (an SDD compressor
+    // runs directly off the panels, so it draws no DC current without solar).
+    // The interop schema requires DCCD in [0, 99.9].
+    const duty = interval_s > 0 ? compressor_runtime_s / interval_s : 0.0;
+    let dccd = solar_power_available
+      ? this.config.solar_compressor_current_a * duty
+      : 0.0;
+    dccd = round2(Math.min(99.9, Math.max(0.0, dccd)));
 
     // BLOG/BEMD: logger battery voltage mapped from SOC
     const blog = round1(
@@ -202,7 +223,7 @@ export class SolarPowerModel {
 
     const readings = {
       DCSV: dcsv,
-      DCCD: round1(powered_s),
+      DCCD: dccd,
       BLOG: blog,
       BEMD: blog,
     };
@@ -224,4 +245,9 @@ export class SolarPowerModel {
 /** Round to 1 decimal place. */
 function round1(v) {
   return Math.round(v * 10) / 10;
+}
+
+/** Round to 2 decimal places. */
+function round2(v) {
+  return Math.round(v * 100) / 100;
 }

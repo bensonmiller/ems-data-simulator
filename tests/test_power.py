@@ -59,11 +59,23 @@ class TestMainsPowerModelSimulateInterval:
         state, readings = model.simulate_interval(state, NOON, INTERVAL, 0.0)
         assert readings["SVA"] == 600
 
-    def test_accd_equals_interval_when_no_outage(self):
-        model = MainsPowerModel(_mains_config(), random.Random(42))
+    def test_accd_is_baseline_current_when_compressor_idle(self):
+        cfg = _mains_config()
+        model = MainsPowerModel(cfg, random.Random(42))
         state = PowerState()
+        # Compressor idle for the whole interval -> only the baseline draw.
         state, readings = model.simulate_interval(state, NOON, INTERVAL, 0.0)
-        assert readings["ACCD"] == INTERVAL
+        assert readings["ACCD"] == pytest.approx(cfg.mains_baseline_current_a)
+
+    def test_accd_scales_with_compressor_duty_cycle(self):
+        cfg = _mains_config()
+        model = MainsPowerModel(cfg, random.Random(42))
+        state = PowerState()
+        # Compressor runs the full interval -> baseline + full running draw.
+        state, readings = model.simulate_interval(state, NOON, INTERVAL, INTERVAL)
+        expected = cfg.mains_baseline_current_a + cfg.mains_compressor_current_a
+        assert readings["ACCD"] == pytest.approx(round(expected, 2))
+        assert 0.01 <= readings["ACCD"] <= 49.99
 
     def test_acsv_near_nominal_voltage(self):
         cfg = _mains_config(nominal_voltage=600)
@@ -75,14 +87,15 @@ class TestMainsPowerModelSimulateInterval:
 
 
 class TestMainsPowerModelOutage:
-    """Outage behavior: SVA=0, ACCD=0 when in_outage is True."""
+    """Outage behavior: SVA=0; ACCD floored to schema minimum when in_outage."""
 
     def test_readings_zero_during_outage(self):
         model = MainsPowerModel(_mains_config(), random.Random(42))
         state = PowerState(in_outage=True, outage_end=NOON + dt.timedelta(hours=5))
         state, readings = model.simulate_interval(state, NOON, INTERVAL, 0.0)
         assert readings["SVA"] == 0
-        assert readings["ACCD"] == 0.0
+        # No AC current during an outage, floored to the schema minimum (0.01).
+        assert readings["ACCD"] == 0.01
         assert readings["ACSV"] == 0.0
 
     def test_cumulative_powered_does_not_increase_during_outage(self):

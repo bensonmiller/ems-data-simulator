@@ -266,11 +266,11 @@ describe("Physical plausibility", () => {
           }
         });
 
-        it("ACCD is in [0, interval]", () => {
+        it("ACCD is a current within the schema range [0.01, 49.99]", () => {
           for (let i = 0; i < jsResult.records.length; i++) {
             const accd = jsResult.records[i].ACCD;
-            expect(accd, `Record ${i}: ACCD`).toBeGreaterThanOrEqual(0);
-            expect(accd, `Record ${i}: ACCD`).toBeLessThanOrEqual(INTERVAL);
+            expect(accd, `Record ${i}: ACCD`).toBeGreaterThanOrEqual(0.01);
+            expect(accd, `Record ${i}: ACCD`).toBeLessThanOrEqual(49.99);
           }
         });
       }
@@ -283,11 +283,11 @@ describe("Physical plausibility", () => {
           }
         });
 
-        it("DCCD is in [0, interval]", () => {
+        it("DCCD is a current within the schema range [0, 99.9]", () => {
           for (let i = 0; i < jsResult.records.length; i++) {
             const dccd = jsResult.records[i].DCCD;
             expect(dccd, `Record ${i}: DCCD`).toBeGreaterThanOrEqual(0);
-            expect(dccd, `Record ${i}: DCCD`).toBeLessThanOrEqual(INTERVAL);
+            expect(dccd, `Record ${i}: DCCD`).toBeLessThanOrEqual(99.9);
           }
         });
       }

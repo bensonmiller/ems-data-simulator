@@ -109,6 +109,11 @@ class PowerConfig:
         blog_voltage_empty: Battery voltage at 0% SOC (V).
         blog_voltage_range: Voltage swing from empty to full (V).
         Default maps to LiFePO4 (4S): 13.2V empty, 14.6V full.
+
+    Appliance current draw (ACCD mains / DCCD solar), in amperes:
+        mains_baseline_current_a: Always-on electronics draw on AC (A).
+        mains_compressor_current_a: Additional AC draw while the compressor runs (A).
+        solar_compressor_current_a: DC draw of the compressor while running on solar (A).
     """
     power_type: str = "mains"
 
@@ -129,6 +134,11 @@ class PowerConfig:
     # Battery voltage mapping (BLOG/BEMD)
     blog_voltage_empty: float = 13.2   # Voltage at 0% SOC
     blog_voltage_range: float = 1.4    # Voltage swing (full - empty)
+
+    # Appliance current draw, amps (ACCD mains / DCCD solar)
+    mains_baseline_current_a: float = 0.05
+    mains_compressor_current_a: float = 1.2
+    solar_compressor_current_a: float = 6.0
 
 
 @dataclass

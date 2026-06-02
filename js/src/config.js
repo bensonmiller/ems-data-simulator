@@ -80,6 +80,9 @@ export class PowerConfig {
     charge_efficiency = 0.85,
     blog_voltage_empty = 13.2,
     blog_voltage_range = 1.4,
+    mains_baseline_current_a = 0.05,
+    mains_compressor_current_a = 1.2,
+    solar_compressor_current_a = 6.0,
   } = {}) {
     this.power_type = power_type;
     this.nominal_voltage = nominal_voltage;
@@ -94,6 +97,9 @@ export class PowerConfig {
     this.charge_efficiency = charge_efficiency;
     this.blog_voltage_empty = blog_voltage_empty;
     this.blog_voltage_range = blog_voltage_range;
+    this.mains_baseline_current_a = mains_baseline_current_a;
+    this.mains_compressor_current_a = mains_compressor_current_a;
+    this.solar_compressor_current_a = solar_compressor_current_a;
   }
 }
 
