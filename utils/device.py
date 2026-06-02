@@ -2,7 +2,7 @@ import datetime as dt
 import random
 from utils.devicegroups import DeviceGroup, rtmds, fridges
 from utils.facilities import Facility, random_facility
-from utils.generator import random_serial
+from utils.generator import random_serial, random_amid
 from utils.simulator import SimulatedRecordSet, SimulatorState, default_config
 import logging
 from utils.schemas import (
@@ -142,6 +142,32 @@ class BaseRtmDevice:
         self.lat = self.config.facility.latitude
         self.lng = self.config.facility.longitude
 
+        # Supplier-internal appliance monitoring id, minted once and held
+        # stable across all reports this device produces.
+        self.amid = random_amid()
+
+    def _build_dlst(self):
+        """Build the cce-interop DLST: maps the performance properties this
+        RTMD reports (TVC, TAMB) to sensor definitions.
+
+        The sensor maker mirrors the EMD/logger manufacturer (EMFR); SIDs are
+        the logger serial plus a sensor port, per the schema's $comment.
+        """
+        return {
+            'TVC': {
+                'SID': f'{self.eser}-P1',
+                'SMFR': self.emfr,
+                'SMOD': f'{self.emod} External Probe',
+                'SDOP': self.edop,
+            },
+            'TAMB': {
+                'SID': f'{self.eser}-P2',
+                'SMFR': self.emfr,
+                'SMOD': f'{self.emod} Onboard Sensor',
+                'SDOP': self.edop,
+            },
+        }
+
     def __repr__(self):
         return (f"BaseRtmDevice(type={self.config.type}, "
                 f"CID={self.cid}, "
@@ -221,6 +247,8 @@ class BaseRtmDevice:
         }
 
         if self.config.type == 'rtmd':
+            report_object['AMID'] = self.amid
+            report_object['DLST'] = self._build_dlst()
             report_object['records'] = recordset.to_rtmd()
             report = RtmdReport(**report_object)
         elif self.config.type == 'ems':

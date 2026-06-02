@@ -31,13 +31,19 @@ def test_rtmd_samples(rtmd_samples):
 
 def test_rtmd_report(rtmd_report):
     assert isinstance(rtmd_report, dict)
-    assert len(rtmd_report) == 8
+    assert len(rtmd_report) == 10
     assert isinstance(rtmd_report['records'], list)
     assert len(rtmd_report['records']) == 10
     assert isinstance(rtmd_report['records'][0], dict)
     assert len(rtmd_report['records'][0]) == 6
     assert rtmd_report['CID'] == 'USA'
     assert rtmd_report['EDOP'] == '2021-05-04'
+    # cce-interop rtmd-report requires AMID (supplier-internal id) and DLST
+    # (performance property -> sensor definition map, with at least TVC).
+    assert isinstance(rtmd_report['AMID'], str)
+    assert isinstance(rtmd_report['DLST'], dict)
+    assert 'TVC' in rtmd_report['DLST']
+    assert set(rtmd_report['DLST']['TVC']) >= {'SID', 'SMFR', 'SMOD'}
 
 def test_rtmd_transfer(rtmd_transfer):
     assert isinstance(rtmd_transfer, dict)

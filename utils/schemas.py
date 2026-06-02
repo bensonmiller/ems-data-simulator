@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, PlainSerializer, HttpUrl
-from typing import List, Optional
+from typing import List, Optional, Dict
 from uuid import uuid4
 from typing_extensions import Annotated
 import datetime as dt
@@ -112,9 +112,20 @@ class RtmdRecord(BaseModel, extra='allow', arbitrary_types_allowed=True):
     ALRM: Optional[str] = None
     EERR: Optional[str] = None
 
+class SensorDefinition(BaseModel):
+    """A single RTMD sensor definition (cce-interop rtmd-sensor-schema)."""
+    SID: str   # Unique sensor ID (e.g. RTMD serial + sensor port)
+    SMFR: str  # Sensor manufacturer
+    SMOD: str  # Sensor model
+    SDOP: Optional[str] = None  # Sensor date of production (YYYY-MM-DD)
+
 class RtmdReport(BaseModel, arbitrary_types_allowed=True):
     """An RtmdReport includes common data plus an array of RtmdRecords."""
+    AMID: str  # Appliance Monitoring ID (supplier-internal, stable id)
     CID: str
+    # DLST maps fridge performance properties (TVC/TFRZ/TAMB/IDRV) to sensor
+    # definitions; cce-interop requires the object and at least a TVC entry.
+    DLST: Dict[str, SensorDefinition]
     EDOP: dt.date
     EMFR: str
     EMOD: str

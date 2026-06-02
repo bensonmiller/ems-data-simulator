@@ -21,6 +21,20 @@ export function randomSerial() {
 }
 
 /**
+ * Generate a supplier-internal Appliance Monitoring ID (AMID).
+ *
+ * Per cce-interop, AMID references the appliance in the RTMD supplier's cloud
+ * platform -- deliberately NOT the serial/asset number. A random 12-hex token
+ * (e.g. "4bb74045097e") matches the schema examples; mint once per device and
+ * reuse across reports to keep it stable.
+ *
+ * @returns {string} 12-character hex string
+ */
+export function randomAmid() {
+  return crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+}
+
+/**
  * Build a TransferMetadata plain object.
  * @param {'rtmd'|'ems'} type
  * @returns {object}
@@ -197,6 +211,35 @@ export class BaseRtmDevice {
     this.cid = config.cid;
     this.lat = config.lat;
     this.lng = config.lng;
+
+    // Supplier-internal appliance monitoring id, minted once and held stable
+    // across all reports this device produces.
+    this.amid = randomAmid();
+  }
+
+  /**
+   * Build the cce-interop DLST: maps the performance properties this RTMD
+   * reports (TVC, TAMB) to sensor definitions. The sensor maker mirrors the
+   * EMD/logger manufacturer (EMFR); SIDs are the logger serial plus a sensor
+   * port, per the schema's $comment.
+   *
+   * @returns {object}
+   */
+  _buildDlst() {
+    return {
+      TVC: {
+        SID: `${this.eser}-P1`,
+        SMFR: this.emfr,
+        SMOD: `${this.emod} External Probe`,
+        SDOP: this.edop,
+      },
+      TAMB: {
+        SID: `${this.eser}-P2`,
+        SMFR: this.emfr,
+        SMOD: `${this.emod} Onboard Sensor`,
+        SDOP: this.edop,
+      },
+    };
   }
 
   /**
@@ -266,6 +309,8 @@ export class BaseRtmDevice {
 
     let report;
     if (this.config.type === "rtmd") {
+      reportObj.AMID = this.amid;
+      reportObj.DLST = this._buildDlst();
       reportObj.records = recordset.toRtmd();
       report = new RtmdReport(reportObj);
     } else {

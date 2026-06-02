@@ -259,7 +259,10 @@ export class RtmdRecord {
 // RtmdReport
 // ---------------------------------------------------------------------------
 
-const RTMD_REPORT_REQUIRED = ['CID', 'EDOP', 'EMFR', 'EMOD', 'EPQS', 'ESER', 'EMSV'];
+// AMID (supplier-internal Appliance Monitoring ID) and DLST (a map of
+// performance properties TVC/TFRZ/TAMB/IDRV to sensor definitions, TVC
+// required) are required by the cce-interop rtmd-report schema.
+const RTMD_REPORT_REQUIRED = ['AMID', 'CID', 'DLST', 'EDOP', 'EMFR', 'EMOD', 'EPQS', 'ESER', 'EMSV'];
 const RTMD_REPORT_OPTIONAL = [
   'ACAT', 'ADOP', 'AID', 'AMFR', 'AMOD', 'APQS', 'ASER',
   'EID', 'RNAM', 'DNAM', 'FNAM', 'FID', 'LAT', 'LNG', 'SIGN', 'EXTRA',

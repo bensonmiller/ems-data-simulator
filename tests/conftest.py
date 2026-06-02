@@ -69,13 +69,22 @@ def rtmd_report(rtmd_samples):
     words = gib.generate_words(3)
     number = str(randint(100,999))
 
+    emfr = " ".join(gib.generate_words(2)).title() + " Inc."
+    emod = words[0].capitalize() + f'-{number}'
+    eser = serial_number()
+
     obj = {
+        'AMID': uuid4().hex[:12],
         'CID': 'USA',
+        'DLST': {
+            'TVC': {'SID': f'{eser}-P1', 'SMFR': emfr, 'SMOD': f'{emod} External Probe', 'SDOP': '2021-05-04'},
+            'TAMB': {'SID': f'{eser}-P2', 'SMFR': emfr, 'SMOD': f'{emod} Onboard Sensor', 'SDOP': '2021-05-04'},
+        },
         'EDOP': '2021-05-04',
-        'EMFR': " ".join(gib.generate_words(2)).title() + " Inc.",
-        'EMOD': words[0].capitalize() + f'-{number}',
+        'EMFR': emfr,
+        'EMOD': emod,
         'EPQS': f'E006/{number}',
-        'ESER': serial_number(),
+        'ESER': eser,
         'EMSV': '0.0.1',
         'records': rtmd_samples
     }

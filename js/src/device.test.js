@@ -151,6 +151,38 @@ describe("BaseRtmDevice (RTMD)", () => {
     expect(report.AMFR).toBe("Vestfrost");
     expect(report.EMFR).not.toBe(report.AMFR);
   });
+
+  it("RTMD report carries cce-interop AMID and a coherent DLST", () => {
+    const dev = new BaseRtmDevice(makeConfig());
+    const json = dev.createReport(REPORT_TIME).toJSON();
+
+    // AMID: supplier-internal id, present and a non-empty string.
+    expect(typeof json.AMID).toBe("string");
+    expect(json.AMID.length).toBeGreaterThan(0);
+
+    // DLST: maps performance properties to sensor definitions; TVC required.
+    expect(json.DLST).toHaveProperty("TVC");
+    expect(json.DLST).toHaveProperty("TAMB");
+    for (const prop of ["TVC", "TAMB"]) {
+      const sensor = json.DLST[prop];
+      expect(sensor).toMatchObject({
+        SID: expect.any(String),
+        SMFR: dev.emfr, // sensor maker mirrors the EMD/logger manufacturer
+        SMOD: expect.any(String),
+        SDOP: dev.edop,
+      });
+      expect(sensor.SID).toContain(dev.eser); // RTMD serial + sensor port
+    }
+    // Distinct sensor ports per property.
+    expect(json.DLST.TVC.SID).not.toBe(json.DLST.TAMB.SID);
+  });
+
+  it("AMID is stable across sequential reports from the same device", () => {
+    const dev = new BaseRtmDevice(makeConfig());
+    const a = dev.createReport(REPORT_TIME);
+    const b = dev.createReport(new Date(REPORT_TIME.getTime() + 3600 * 1000));
+    expect(a.AMID).toBe(b.AMID);
+  });
 });
 
 // ---------------------------------------------------------------------------
