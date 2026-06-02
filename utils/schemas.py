@@ -13,11 +13,23 @@ emsDateTime = Annotated[
     )
 ]
 
+# ISO-8601 UTC with a trailing 'Z' (no numeric offset), per the cce-interop
+# transmission-metadata schema pattern for meta.transferredAt.
+zuluDateTime = Annotated[
+    dt.datetime,
+    PlainSerializer(
+        lambda x: (x if x.tzinfo else x.replace(tzinfo=dt.timezone.utc))
+            .astimezone(dt.timezone.utc).replace(tzinfo=None)
+            .isoformat(timespec='seconds') + 'Z',
+        return_type=str
+    )
+]
+
 class TransferMetadata(BaseModel, arbitrary_types_allowed=True):
     """Schema for metadata related to CCDX transfers, including both EMS and RTM transfers."""
     transferId: str
     transferSrc: str = 'org.nhgh'
-    transferredAt: dt.datetime = Field(default_factory=lambda: dt.datetime.now(dt.UTC))
+    transferredAt: zuluDateTime = Field(default_factory=lambda: dt.datetime.now(dt.UTC))
     transferType: str = 'rtm'
     schemaVersion: str = '0.8.0'
     callbackUrl: Optional[HttpUrl] = None

@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from utils.schemas import (
     TransferMetadata,
@@ -60,6 +61,12 @@ def test_transfer_metadata_to_pydantic_model(transfer_metadata):
     assert isinstance(model.transferredAt, datetime)
     assert isinstance(model.schemaVersion, str)
     assert model.callbackUrl is None
+
+def test_transferred_at_serializes_with_zulu_suffix(transfer_metadata):
+    # cce-interop transmission-metadata requires a trailing 'Z', not a +00:00 offset.
+    pattern = r'^2[0-9]{3}-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-5][0-9](\.[0-9]+)?Z$'
+    dumped = TransferMetadata(**transfer_metadata).model_dump(mode='json')
+    assert re.match(pattern, dumped['transferredAt']), dumped['transferredAt']
 
 def test_rtmd_transfer_to_pydantic_model(rtmd_transfer):
     model = RtmdTransfer(**rtmd_transfer)
