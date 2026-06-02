@@ -182,33 +182,36 @@ class TestStateContinuity:
 
 # -- 7. EERR -> LERR field mapping in to_ems() --------------------------------
 
-class TestEerrToLerrMapping:
-    def test_eerr_mapped_to_lerr_in_ems(self):
-        """EERR from raw records should appear as LERR in EMS output."""
+class TestEerrLerrIndependence:
+    def test_eerr_preserved_in_ems(self):
+        """EERR (EMD error code) stays in EERR -- it is not relabeled into LERR."""
         cfg = _mains_config()
         rs = SimulatedRecordSet.generate(cfg, batch_size=5, start_time=FIXED_START)
 
-        # Manually inject an EERR value to guarantee the mapping is testable
+        # Manually inject an EERR value with no logger error.
         rs.records[0]["EERR"] = "E001"
+        rs.records[0]["LERR"] = None
 
         ems_list = rs.to_ems()
-        assert ems_list[0].LERR == "E001"
+        assert ems_list[0].EERR == "E001"
+        assert ems_list[0].LERR is None
 
-    def test_eerr_not_present_in_ems_output(self):
-        """After mapping, the EERR key should not be set on the EMS record via the filtered dict."""
+    def test_lerr_independent_of_eerr(self):
+        """LERR (logger error code) is carried through on its own, with no EERR fabricated."""
+        cfg = _mains_config()
+        rs = SimulatedRecordSet.generate(cfg, batch_size=2, start_time=FIXED_START)
+        rs.records[0]["EERR"] = None
+        rs.records[0]["LERR"] = "L042"
+        ems_list = rs.to_ems()
+        assert ems_list[0].LERR == "L042"
+        assert ems_list[0].EERR is None
+
+    def test_eerr_and_lerr_both_present(self):
+        """Both error fields can be populated simultaneously and independently."""
         cfg = _mains_config()
         rs = SimulatedRecordSet.generate(cfg, batch_size=2, start_time=FIXED_START)
         rs.records[0]["EERR"] = "E002"
+        rs.records[0]["LERR"] = "L003"
         ems_list = rs.to_ems()
-        # The EMS base schema has EERR as an optional field with default None,
-        # so after our pop it should remain None (not "E002").
-        assert ems_list[0].EERR is None
-
-    def test_lerr_none_when_eerr_absent(self):
-        cfg = _mains_config()
-        rs = SimulatedRecordSet.generate(cfg, batch_size=2, start_time=FIXED_START)
-        # Ensure EERR is None
-        rs.records[0]["EERR"] = None
-        ems_list = rs.to_ems()
-        # When EERR is None it should still be popped and set as LERR
-        assert ems_list[0].LERR is None
+        assert ems_list[0].EERR == "E002"
+        assert ems_list[0].LERR == "L003"

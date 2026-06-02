@@ -245,7 +245,7 @@ class SimulatedRecordSet:
 
         base_fields = [
             'ABST', 'ALRM', 'BEMD', 'BLOG', 'CMPR', 'DORV',
-            'HAMB', 'HOLD', 'EERR', 'TAMB', 'TCON', 'TVC',
+            'HAMB', 'HOLD', 'EERR', 'LERR', 'TAMB', 'TCON', 'TVC',
         ]
 
         if powersource == 'solar':
@@ -258,10 +258,9 @@ class SimulatedRecordSet:
         all_fields = base_fields + extra_fields
         result = []
         for r in self.records:
+            # EERR (EMD error codes) and LERR (logger error codes) are
+            # distinct fields; both are carried through independently.
             filtered = {k: r[k] for k in all_fields if k in r}
-            # Map EERR to LERR for EMS schema compatibility
-            if 'EERR' in filtered:
-                filtered['LERR'] = filtered.pop('EERR')
             result.append(schema(**filtered))
 
         return result

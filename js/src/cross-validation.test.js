@@ -590,13 +590,15 @@ describe("Format equivalence", () => {
       expect(json).not.toHaveProperty("DCCD");
     });
 
-    it("maps EERR to LERR in EMS format", () => {
-      // Generate enough data that EERR might occur (or check field mapping)
+    it("emits EERR and LERR as independent EMS fields", () => {
       const jsResult = runJS("mains_normal", 24);
-      const emsRecords = jsResult.toEms();
-      const json = emsRecords[0].toJSON();
-      // EERR should not appear; LERR may appear if an error was generated
-      expect(json).not.toHaveProperty("EERR");
+      // EERR (EMD) and LERR (logger) are distinct error fields and must each
+      // survive toEms() on their own -- neither is relabeled into the other.
+      jsResult.records[0].EERR = "eabcd";
+      jsResult.records[0].LERR = "lwxyz";
+      const json = jsResult.toEms()[0].toJSON();
+      expect(json.EERR).toBe("eabcd");
+      expect(json.LERR).toBe("lwxyz");
     });
   });
 

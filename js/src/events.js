@@ -322,7 +322,7 @@ export class AlarmGenerator {
   }
 
   /**
-   * Compute ALRM, HOLD, and EERR fields.
+   * Compute ALRM, HOLD, EERR, and LERR fields.
    *
    * @param {Object} opts
    * @param {number} opts.tvc - Current vaccine chamber temperature.
@@ -330,7 +330,7 @@ export class AlarmGenerator {
    * @param {Date} opts.timestamp - Current timestamp.
    * @param {DoorEvent[]|null} [opts.door_events=null] - Sub-interval door events.
    * @param {number} [opts.interval_s=900.0] - Length of the sample interval in seconds.
-   * @returns {{ALRM: string|null, HOLD: number|null, EERR: string|null}}
+   * @returns {{ALRM: string|null, HOLD: number|null, EERR: string|null, LERR: string|null}}
    */
   deriveAlarms({ tvc, power_available, timestamp, door_events = null, interval_s = 900.0 }) {
     // Track power loss for HOLD calculation
@@ -396,7 +396,7 @@ export class AlarmGenerator {
         ) / 10;
     }
 
-    // EERR: random low-probability error
+    // EERR: random low-probability EMD error code
     let eerr = null;
     if (this.rng.random() < 0.001) {
       const chars = "abcdefghijklmnopqrstuvwxyz";
@@ -406,10 +406,22 @@ export class AlarmGenerator {
       }
     }
 
+    // LERR: random low-probability logger error code, drawn independently
+    // of EERR -- logger and EMD errors are unrelated manufacturer codes.
+    let lerr = null;
+    if (this.rng.random() < 0.001) {
+      const chars = "abcdefghijklmnopqrstuvwxyz";
+      lerr = "";
+      for (let i = 0; i < 5; i++) {
+        lerr += chars[Math.floor(this.rng.random() * chars.length)];
+      }
+    }
+
     return {
       ALRM: codes.length > 0 ? codes.join(" ") : null,
       HOLD: hold,
       EERR: eerr,
+      LERR: lerr,
     };
   }
 }

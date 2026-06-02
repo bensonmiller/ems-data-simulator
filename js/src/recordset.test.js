@@ -201,33 +201,39 @@ describe("StateContinuity", () => {
   });
 });
 
-// -- 7. EERR -> LERR field mapping in toEms() --------------------------------
+// -- 7. EERR and LERR are independent fields in toEms() ----------------------
 
-describe("EERR to LERR mapping", () => {
-  it("EERR mapped to LERR in EMS", () => {
+describe("EERR and LERR independence", () => {
+  it("EERR is preserved (not relabeled) on the EMS record", () => {
     const cfg = mainsConfig();
     const rs = SimulatedRecordSet.generate(cfg, 5, FIXED_START);
     rs.records[0].EERR = "E001";
-    const emsList = rs.toEms();
-    expect(emsList[0].LERR).toBe("E001");
+    rs.records[0].LERR = null;
+    const json = rs.toEms()[0].toJSON();
+    // EMD error code stays in EERR -- it is NOT moved into LERR.
+    expect(json.EERR).toBe("E001");
+    expect(json).not.toHaveProperty("LERR");
   });
 
-  it("EERR not present on EMS record after mapping", () => {
-    const cfg = mainsConfig();
-    const rs = SimulatedRecordSet.generate(cfg, 2, FIXED_START);
-    rs.records[0].EERR = "E002";
-    const emsList = rs.toEms();
-    // EERR should not be set to the mapped value
-    expect(emsList[0].EERR).toBeUndefined();
-  });
-
-  it("LERR is null when EERR is null", () => {
+  it("LERR is carried through independently of EERR", () => {
     const cfg = mainsConfig();
     const rs = SimulatedRecordSet.generate(cfg, 2, FIXED_START);
     rs.records[0].EERR = null;
-    const emsList = rs.toEms();
-    // When EERR is null, it gets popped and set as LERR = null
-    expect(emsList[0].LERR).toBeNull();
+    rs.records[0].LERR = "L042";
+    const json = rs.toEms()[0].toJSON();
+    // Logger error code is emitted on its own, with no EERR fabricated.
+    expect(json.LERR).toBe("L042");
+    expect(json).not.toHaveProperty("EERR");
+  });
+
+  it("both EERR and LERR can be present together", () => {
+    const cfg = mainsConfig();
+    const rs = SimulatedRecordSet.generate(cfg, 2, FIXED_START);
+    rs.records[0].EERR = "E002";
+    rs.records[0].LERR = "L003";
+    const json = rs.toEms()[0].toJSON();
+    expect(json.EERR).toBe("E002");
+    expect(json.LERR).toBe("L003");
   });
 });
 

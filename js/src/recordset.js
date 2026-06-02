@@ -280,7 +280,7 @@ export class SimulatedRecordSet {
 
     const baseFields = [
       "ABST", "ALRM", "BEMD", "BLOG", "CMPR", "DORV",
-      "HAMB", "HOLD", "EERR", "TAMB", "TCON", "TVC",
+      "HAMB", "HOLD", "EERR", "LERR", "TAMB", "TCON", "TVC",
     ];
 
     let extraFields, Schema;
@@ -295,16 +295,13 @@ export class SimulatedRecordSet {
     const allFields = [...baseFields, ...extraFields];
 
     return this.records.map(r => {
+      // EERR (EMD error codes) and LERR (logger error codes) are distinct
+      // fields; both are carried through independently.
       const filtered = {};
       for (const k of allFields) {
         if (k in r && r[k] !== undefined) {
           filtered[k] = r[k];
         }
-      }
-      // Map EERR to LERR for EMS schema compatibility
-      if ("EERR" in filtered) {
-        filtered.LERR = filtered.EERR;
-        delete filtered.EERR;
       }
       return new Schema(filtered);
     });
