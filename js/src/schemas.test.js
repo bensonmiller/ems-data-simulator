@@ -109,6 +109,17 @@ describe('EmsRecordMains', () => {
     expect(json.ALRM).toBe('HEAT');
     expect(json.EERR).toBe('E01');
   });
+
+  it('emits schema-required keys as null when explicitly null (not omitted)', () => {
+    // ems-record requires ALRM/EERR/LERR (type ['string','null']): the key
+    // must be present even when null. toEms() passes these as null during
+    // normal operation, matching Python's exclude_unset=True behavior.
+    const rec = new EmsRecordMains({ ...base, ALRM: null, EERR: null, LERR: null });
+    const json = rec.toJSON();
+    expect(json).toHaveProperty('ALRM', null);
+    expect(json).toHaveProperty('EERR', null);
+    expect(json).toHaveProperty('LERR', null);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -158,7 +169,7 @@ describe('RtmdRecord', () => {
     expect(json).not.toHaveProperty('DORV');
   });
 
-  it('excludes null optional fields', () => {
+  it('excludes optional fields that were never set', () => {
     const rec = new RtmdRecord({
       ABST: new Date('2024-06-01T12:00:00Z'),
       BEMD: 14.2,
@@ -168,6 +179,23 @@ describe('RtmdRecord', () => {
     const json = rec.toJSON();
     expect(json).not.toHaveProperty('ALRM');
     expect(json).not.toHaveProperty('EERR');
+  });
+
+  it('emits schema-required keys as null when explicitly null (not omitted)', () => {
+    // rtmd-record requires ALRM/EERR (type ['string','null']); the keys must
+    // be present even when null. toRtmd() passes these as null during normal
+    // operation, matching Python's exclude_unset=True behavior.
+    const rec = new RtmdRecord({
+      ABST: new Date('2024-06-01T12:00:00Z'),
+      BEMD: 14.2,
+      TAMB: 30.5,
+      TVC: 4.1,
+      ALRM: null,
+      EERR: null,
+    });
+    const json = rec.toJSON();
+    expect(json).toHaveProperty('ALRM', null);
+    expect(json).toHaveProperty('EERR', null);
   });
 
   it('formats ABST as emsDateTime', () => {

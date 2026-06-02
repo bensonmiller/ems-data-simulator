@@ -212,7 +212,9 @@ describe("EERR and LERR independence", () => {
     const json = rs.toEms()[0].toJSON();
     // EMD error code stays in EERR -- it is NOT moved into LERR.
     expect(json.EERR).toBe("E001");
-    expect(json).not.toHaveProperty("LERR");
+    // LERR is a schema-required key (type ['string','null']) and is emitted as
+    // null, not omitted -- and crucially not relabeled with the EERR value.
+    expect(json).toHaveProperty("LERR", null);
   });
 
   it("LERR is carried through independently of EERR", () => {
@@ -223,7 +225,9 @@ describe("EERR and LERR independence", () => {
     const json = rs.toEms()[0].toJSON();
     // Logger error code is emitted on its own, with no EERR fabricated.
     expect(json.LERR).toBe("L042");
-    expect(json).not.toHaveProperty("EERR");
+    // EERR is a schema-required key (type ['string','null']) and is emitted as
+    // null, not omitted -- and crucially not relabeled with the LERR value.
+    expect(json).toHaveProperty("EERR", null);
   });
 
   it("both EERR and LERR can be present together", () => {

@@ -126,9 +126,14 @@ export class EmsRecord {
   }
 
   toJSON() {
+    // Strip only undefined (never-set) fields, not null. Schema-required keys
+    // ALRM/EERR/LERR have type ['string','null']: the KEY must be present even
+    // when the value is null. This matches Python's model_dump(exclude_unset=
+    // True), which keeps explicitly-set null fields. toEms() always passes
+    // these keys (as null during normal operation), so they are emitted.
     const obj = {};
     for (const [k, v] of Object.entries(this)) {
-      if (v === undefined || v === null) continue;
+      if (v === undefined) continue;
       if (k === 'ABST') {
         obj[k] = v instanceof Date ? formatEmsDateTime(v) : v;
       } else {
@@ -229,9 +234,13 @@ export class RtmdRecord {
   }
 
   toJSON() {
+    // Strip only undefined (never-set) fields, not null. rtmd-record requires
+    // ALRM and EERR (type ['string','null']); the keys must be present even
+    // when null. Mirrors Python model_dump(exclude_unset=True). toRtmd()
+    // always passes these keys, so null values are emitted, not dropped.
     const obj = {};
     for (const [k, v] of Object.entries(this)) {
-      if (v === undefined || v === null) continue;
+      if (v === undefined) continue;
       if (k === 'ABST') {
         obj[k] = v instanceof Date ? formatEmsDateTime(v) : v;
       } else {
