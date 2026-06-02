@@ -9,13 +9,15 @@ from utils.schemas import (
 
 def test_metadata(transfer_metadata):
     assert isinstance(transfer_metadata, dict)
-    assert len(transfer_metadata) == 6
+    assert len(transfer_metadata) == 5
     assert isinstance(transfer_metadata['transferId'], str)
     assert isinstance(transfer_metadata['transferSrc'], str)
     assert isinstance(transfer_metadata['transferredAt'], datetime)
     assert transfer_metadata['transferType'] == 'rtm'
     assert isinstance(transfer_metadata['schemaVersion'], str)
-    assert transfer_metadata['callbackUrl'] is None
+    # transferCallbackUrl is omitted entirely when no webhook URL is present.
+    assert 'callbackUrl' not in transfer_metadata
+    assert 'transferCallbackUrl' not in transfer_metadata
 
 def test_rtmd_samples(rtmd_samples):
     assert isinstance(rtmd_samples, list)
@@ -49,7 +51,7 @@ def test_rtmd_transfer(rtmd_transfer):
     assert isinstance(rtmd_transfer, dict)
     assert len(rtmd_transfer) == 2
     assert isinstance(rtmd_transfer['meta'], dict)
-    assert len(rtmd_transfer['meta']) == 6
+    assert len(rtmd_transfer['meta']) == 5
     assert isinstance(rtmd_transfer['meta']['transferId'], str)
     assert isinstance(rtmd_transfer['meta']['transferSrc'], str)
     assert rtmd_transfer['meta']['transferSrc'] == 'org.nhgh'
@@ -66,7 +68,7 @@ def test_transfer_metadata_to_pydantic_model(transfer_metadata):
     assert isinstance(model.transferSrc, str)
     assert isinstance(model.transferredAt, datetime)
     assert isinstance(model.schemaVersion, str)
-    assert model.callbackUrl is None
+    assert model.transferCallbackUrl is None
 
 def test_transferred_at_serializes_with_zulu_suffix(transfer_metadata):
     # cce-interop transmission-metadata requires a trailing 'Z', not a +00:00 offset.

@@ -46,7 +46,7 @@ def transfer_metadata():
         'transferredAt': datetime.now(pytz.utc),
         'transferType': 'rtm',
         'schemaVersion': '0.8.0',
-        'callbackUrl': None
+        # transferCallbackUrl is omitted when no webhook URL is supplied.
     }
     return obj
 

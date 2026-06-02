@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, PlainSerializer, HttpUrl
+from pydantic import BaseModel, Field, PlainSerializer
 from typing import List, Optional, Dict
 from uuid import uuid4
 from typing_extensions import Annotated
@@ -32,7 +32,10 @@ class TransferMetadata(BaseModel, arbitrary_types_allowed=True):
     transferredAt: zuluDateTime = Field(default_factory=lambda: dt.datetime.now(dt.UTC))
     transferType: str = 'rtm'
     schemaVersion: str = '0.8.0'
-    callbackUrl: Optional[HttpUrl] = None
+    # cce-interop transmission-metadata names this 'transferCallbackUrl' and
+    # types it as a non-nullable string, so it must be omitted (not null) when
+    # absent. Serialization uses exclude_unset, so leaving it unset omits it.
+    transferCallbackUrl: Optional[str] = None
 
 class EmsRecord(BaseModel, extra='allow', arbitrary_types_allowed=True):
     """

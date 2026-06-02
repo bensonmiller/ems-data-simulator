@@ -92,7 +92,7 @@ class PowerConfig:
         power_type: "mains" or "solar".
 
     Mains-specific:
-        nominal_voltage: Normal mains voltage (V), maps to SVA field.
+        nominal_voltage: Normal mains voltage (V), maps to the ACSV field.
         outage_probability_per_hour: Probability of an outage starting in any given hour.
         mean_outage_duration_hours: Mean duration of outages (exponential distribution).
 
@@ -105,10 +105,10 @@ class PowerConfig:
         min_operating_voltage: Minimum voltage to run compressor (V).
         charge_efficiency: Fraction of solar power stored in battery (0.0 to 1.0).
 
-    Battery voltage mapping:
-        blog_voltage_empty: Battery voltage at 0% SOC (V).
-        blog_voltage_range: Voltage swing from empty to full (V).
-        Default maps to LiFePO4 (4S): 13.2V empty, 14.6V full.
+    Battery life remaining (BLOG/BEMD), in days:
+        blog_full_days: Logger battery days of life remaining at full charge.
+        bemd_full_days: EMD battery days of life remaining at full charge.
+        Schema BLOG/BEMD are estimated DAYS remaining (0–9999.9), not volts.
 
     Appliance current draw (ACCD mains / DCCD solar), in amperes:
         mains_baseline_current_a: Always-on electronics draw on AC (A).
@@ -118,7 +118,7 @@ class PowerConfig:
     power_type: str = "mains"
 
     # Mains
-    nominal_voltage: int = 600
+    nominal_voltage: int = 230
     outage_probability_per_hour: float = 0.005
     mean_outage_duration_hours: float = 2.0
 
@@ -131,9 +131,9 @@ class PowerConfig:
     min_operating_voltage: float = 12.0
     charge_efficiency: float = 0.85
 
-    # Battery voltage mapping (BLOG/BEMD)
-    blog_voltage_empty: float = 13.2   # Voltage at 0% SOC
-    blog_voltage_range: float = 1.4    # Voltage swing (full - empty)
+    # Battery life remaining mapping (BLOG/BEMD), in days
+    blog_full_days: float = 400.0   # Logger battery days remaining at full charge
+    bemd_full_days: float = 400.0   # EMD battery days remaining at full charge
 
     # Appliance current draw, amps (ACCD mains / DCCD solar)
     mains_baseline_current_a: float = 0.05

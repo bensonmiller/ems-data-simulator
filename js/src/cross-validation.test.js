@@ -244,16 +244,16 @@ describe("Physical plausibility", () => {
         }
       });
 
-      it("BEMD and BLOG are in reasonable range [0, 20]", () => {
+      it("BEMD and BLOG are days-remaining within schema range [0, 9999.9]", () => {
         for (let i = 0; i < jsResult.records.length; i++) {
           const rec = jsResult.records[i];
           if (rec.BEMD !== undefined && rec.BEMD !== null) {
             expect(rec.BEMD, `Record ${i}: BEMD`).toBeGreaterThanOrEqual(0);
-            expect(rec.BEMD, `Record ${i}: BEMD`).toBeLessThanOrEqual(20);
+            expect(rec.BEMD, `Record ${i}: BEMD`).toBeLessThanOrEqual(9999.9);
           }
           if (rec.BLOG !== undefined && rec.BLOG !== null) {
             expect(rec.BLOG, `Record ${i}: BLOG`).toBeGreaterThanOrEqual(0);
-            expect(rec.BLOG, `Record ${i}: BLOG`).toBeLessThanOrEqual(20);
+            expect(rec.BLOG, `Record ${i}: BLOG`).toBeLessThanOrEqual(9999.9);
           }
         }
       });

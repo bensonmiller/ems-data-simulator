@@ -74,7 +74,7 @@ describe("PowerConfig", () => {
   it("instantiates with correct defaults", () => {
     const pc = new PowerConfig();
     expect(pc.power_type).toBe("mains");
-    expect(pc.nominal_voltage).toBe(600);
+    expect(pc.nominal_voltage).toBe(230);
     expect(pc.outage_probability_per_hour).toBe(0.005);
     expect(pc.mean_outage_duration_hours).toBe(2.0);
     expect(pc.peak_dcsv).toBe(20.0);
@@ -84,8 +84,8 @@ describe("PowerConfig", () => {
     expect(pc.battery_initial_soc).toBe(0.9);
     expect(pc.min_operating_voltage).toBe(12.0);
     expect(pc.charge_efficiency).toBe(0.85);
-    expect(pc.blog_voltage_empty).toBe(13.2);
-    expect(pc.blog_voltage_range).toBe(1.4);
+    expect(pc.blog_full_days).toBe(400.0);
+    expect(pc.bemd_full_days).toBe(400.0);
   });
 });
 

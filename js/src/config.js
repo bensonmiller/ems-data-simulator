@@ -68,7 +68,7 @@ export class AmbientConfig {
 export class PowerConfig {
   constructor({
     power_type = "mains",
-    nominal_voltage = 600,
+    nominal_voltage = 230,
     outage_probability_per_hour = 0.005,
     mean_outage_duration_hours = 2.0,
     peak_dcsv = 20.0,
@@ -78,8 +78,8 @@ export class PowerConfig {
     battery_initial_soc = 0.9,
     min_operating_voltage = 12.0,
     charge_efficiency = 0.85,
-    blog_voltage_empty = 13.2,
-    blog_voltage_range = 1.4,
+    blog_full_days = 400.0,
+    bemd_full_days = 400.0,
     mains_baseline_current_a = 0.05,
     mains_compressor_current_a = 1.2,
     solar_compressor_current_a = 6.0,
@@ -95,8 +95,8 @@ export class PowerConfig {
     this.battery_initial_soc = battery_initial_soc;
     this.min_operating_voltage = min_operating_voltage;
     this.charge_efficiency = charge_efficiency;
-    this.blog_voltage_empty = blog_voltage_empty;
-    this.blog_voltage_range = blog_voltage_range;
+    this.blog_full_days = blog_full_days;
+    this.bemd_full_days = bemd_full_days;
     this.mains_baseline_current_a = mains_baseline_current_a;
     this.mains_compressor_current_a = mains_compressor_current_a;
     this.solar_compressor_current_a = solar_compressor_current_a;

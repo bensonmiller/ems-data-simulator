@@ -205,6 +205,13 @@ export class AlarmGenerator {
   static DOOR_THRESHOLD_S = 5 * 60; // 5 minutes
   static POWR_THRESHOLD_S = 24 * 3600; // 24 hours
 
+  // Pre-defined EMD/Logger error codes (PQS E006 DS01.2 Annex-1 "Error Codes").
+  // Codes are 1-7 chars; multiple active codes are space-separated (e.g.
+  // "COMM PWR"). EMD errors include the compressor diagnostic codes 1-7 plus
+  // the communication code; Logger errors cover sensor/battery/self-test faults.
+  static EMD_ERROR_CODES = ["1", "2", "3", "4", "5", "6", "7", "COMM"];
+  static LOGGER_ERROR_CODES = ["COMM", "SENS", "BATT", "RTC", "MEM"];
+
   /**
    * @param {import('./random.js').SeededRandom} rng
    */
@@ -322,6 +329,24 @@ export class AlarmGenerator {
   }
 
   /**
+   * Pick one (usually) or two distinct pre-defined error codes, returned as a
+   * space-separated string per the Annex format for multiple codes (e.g.
+   * "COMM PWR").
+   * @param {string[]} codes
+   * @returns {string}
+   */
+  _pickErrorCodes(codes) {
+    const n = Math.min(this.rng.random() < 0.8 ? 1 : 2, codes.length);
+    const pool = codes.slice();
+    const chosen = [];
+    for (let i = 0; i < n; i++) {
+      const idx = Math.floor(this.rng.random() * pool.length);
+      chosen.push(pool.splice(idx, 1)[0]);
+    }
+    return chosen.join(" ");
+  }
+
+  /**
    * Compute ALRM, EERR, and LERR fields.
    *
    * HOLD (holdover autonomy) is NOT derived here. It is a thermal-reserve
@@ -392,25 +417,17 @@ export class AlarmGenerator {
       }
     }
 
-    // EERR: random low-probability EMD error code
+    // EERR: low-probability EMD error code, drawn from the Annex set.
     let eerr = null;
     if (this.rng.random() < 0.001) {
-      const chars = "abcdefghijklmnopqrstuvwxyz";
-      eerr = "";
-      for (let i = 0; i < 5; i++) {
-        eerr += chars[Math.floor(this.rng.random() * chars.length)];
-      }
+      eerr = this._pickErrorCodes(AlarmGenerator.EMD_ERROR_CODES);
     }
 
-    // LERR: random low-probability logger error code, drawn independently
-    // of EERR -- logger and EMD errors are unrelated manufacturer codes.
+    // LERR: low-probability logger error code, drawn independently of EERR
+    // from the Annex set -- logger and EMD errors are unrelated conditions.
     let lerr = null;
     if (this.rng.random() < 0.001) {
-      const chars = "abcdefghijklmnopqrstuvwxyz";
-      lerr = "";
-      for (let i = 0; i < 5; i++) {
-        lerr += chars[Math.floor(this.rng.random() * chars.length)];
-      }
+      lerr = this._pickErrorCodes(AlarmGenerator.LOGGER_ERROR_CODES);
     }
 
     return {

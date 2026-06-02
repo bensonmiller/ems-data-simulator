@@ -70,16 +70,20 @@ class MainsPowerModel:
         state = self._check_outage(state, timestamp, interval_s)
 
         if state.in_outage:
-            sva = 0
             acsv = 0.0
             powered_s = 0.0
         else:
-            sva = self.config.nominal_voltage
-            # Add small voltage variation
-            acsv = round(sva + self.rng.gauss(0, sva * 0.02), 1)
+            nominal = self.config.nominal_voltage
+            # ACSV is the average AC supply voltage; add small variation.
+            acsv = round(nominal + self.rng.gauss(0, nominal * 0.02), 1)
             powered_s = interval_s
 
         state.cumulative_powered_s += powered_s
+
+        # SVA is the number of SECONDS within the (15-min) period that AC voltage
+        # was in-bounds: the full interval when powered, 0 during an outage.
+        # The interop schema bounds SVA to [0, 900].
+        sva = int(round(min(900.0, powered_s)))
 
         # ACCD is the AC current (amps) drawn by the appliance, modeled from the
         # compressor duty cycle: a small always-on baseline plus the running
@@ -174,14 +178,16 @@ class SolarPowerModel:
         dccd = self.config.solar_compressor_current_a * duty if solar_power_available else 0.0
         dccd = round(min(99.9, max(0.0, dccd)), 2)
 
-        # BLOG/BEMD: logger battery voltage mapped from SOC
-        blog = round(self.config.blog_voltage_empty + state.battery_soc * self.config.blog_voltage_range, 1)
+        # BLOG/BEMD: estimated DAYS of battery life remaining, scaled from the
+        # logger battery state of charge (schema range [0, 9999.9]).
+        blog = round(state.battery_soc * self.config.blog_full_days, 1)
+        bemd = round(state.battery_soc * self.config.bemd_full_days, 1)
 
         readings = {
             'DCSV': dcsv,
             'DCCD': dccd,
             'BLOG': blog,
-            'BEMD': blog,
+            'BEMD': bemd,
         }
         return state, readings
 

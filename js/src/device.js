@@ -37,17 +37,23 @@ export function randomAmid() {
 /**
  * Build a TransferMetadata plain object.
  * @param {'rtmd'|'ems'} type
+ * @param {string|null} [callbackUrl] - Optional webhook URL. Per cce-interop the
+ *   field is 'transferCallbackUrl' (non-nullable string); it is omitted entirely
+ *   when no URL is supplied.
  * @returns {object}
  */
-export function transferMetadata(type = "rtmd") {
-  return {
+export function transferMetadata(type = "rtmd", callbackUrl = null) {
+  const obj = {
     transferId: crypto.randomUUID(),
     transferSrc: "org.nhgh",
     transferredAt: new Date(),
     transferType: type === "ems" ? "ems" : "rtm",
     schemaVersion: "0.8.0",
-    callbackUrl: null,
   };
+  if (callbackUrl != null) {
+    obj.transferCallbackUrl = callbackUrl;
+  }
+  return obj;
 }
 
 // ---------------------------------------------------------------------------

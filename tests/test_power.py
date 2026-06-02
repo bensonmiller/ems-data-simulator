@@ -52,12 +52,15 @@ class TestMainsPowerModelSimulateInterval:
         state, readings = model.simulate_interval(state, NOON, INTERVAL, 0.0)
         assert set(readings.keys()) == {"SVA", "ACCD", "ACSV"}
 
-    def test_sva_equals_nominal_voltage_when_no_outage(self):
-        cfg = _mains_config(nominal_voltage=600)
+    def test_sva_is_in_bounds_seconds_when_no_outage(self):
+        # SVA = number of in-bounds AC seconds in the period (full interval when
+        # powered, capped at 900), NOT the supply voltage.
+        cfg = _mains_config(nominal_voltage=230)
         model = MainsPowerModel(cfg, random.Random(42))
         state = PowerState()
         state, readings = model.simulate_interval(state, NOON, INTERVAL, 0.0)
-        assert readings["SVA"] == 600
+        assert readings["SVA"] == 900
+        assert 0 <= readings["SVA"] <= 900
 
     def test_accd_is_baseline_current_when_compressor_idle(self):
         cfg = _mains_config()
@@ -115,7 +118,8 @@ class TestMainsPowerModelOutage:
         state, readings = model.simulate_interval(state, NOON, INTERVAL, 0.0)
         # Outage should have ended; power should be available
         assert state.in_outage is False
-        assert readings["SVA"] == model.config.nominal_voltage
+        # SVA reflects the full in-bounds interval seconds (capped at 900).
+        assert readings["SVA"] == 900
 
     def test_outage_can_start_stochastically(self):
         # With outage_probability_per_hour = 1.0, an outage is virtually certain
@@ -243,13 +247,18 @@ class TestSolarBatterySOC:
         state, readings = model.simulate_interval(state, NOON, INTERVAL, 0.0)
         assert set(readings.keys()) == {"DCSV", "DCCD", "BLOG", "BEMD"}
 
-    def test_blog_range(self):
-        """BLOG should be between 10.5 (empty) and 14.4 (full)."""
-        model = SolarPowerModel(_solar_config(), random.Random(42))
+    def test_blog_is_days_remaining(self):
+        """BLOG/BEMD are estimated DAYS of battery life remaining (0-9999.9),
+        scaled from SOC -- not a battery voltage."""
+        cfg = _solar_config()
+        model = SolarPowerModel(cfg, random.Random(42))
         for soc in [0.0, 0.5, 1.0]:
             state = PowerState(battery_soc=soc)
+            # simulate_interval updates SOC before deriving BLOG, so compare
+            # against the post-update SOC carried on the returned state.
             state, readings = model.simulate_interval(state, NOON, INTERVAL, 0.0)
-            assert 10.0 <= readings["BLOG"] <= 15.0
+            assert readings["BLOG"] == pytest.approx(round(state.battery_soc * cfg.blog_full_days, 1))
+            assert 0.0 <= readings["BLOG"] <= 9999.9
             assert readings["BEMD"] == readings["BLOG"]
 
 

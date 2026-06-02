@@ -18,16 +18,20 @@ def random_amid():
     return uuid4().hex[:12]
 
 
-def transfer_metadata(type='rtmd'):
+def transfer_metadata(type='rtmd', callback_url=None):
     obj = {
         'transferId': str(uuid4()),
         'transferSrc': 'org.nhgh',
         'transferredAt': datetime.now(pytz.utc),
         'transferType': 'rtm',
         'schemaVersion': '0.8.0',
-        'callbackUrl': None
     }
     if type == 'ems':
         obj['transferType'] = 'ems'
+
+    # Per cce-interop, the webhook field is 'transferCallbackUrl' (a non-nullable
+    # string). Include it only when a URL is supplied; omit it entirely otherwise.
+    if callback_url is not None:
+        obj['transferCallbackUrl'] = callback_url
 
     return obj

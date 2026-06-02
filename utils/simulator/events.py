@@ -168,6 +168,13 @@ class AlarmGenerator:
     DOOR_THRESHOLD_S = 5 * 60      # 5 minutes
     POWR_THRESHOLD_S = 24 * 3600   # 24 hours
 
+    # Pre-defined EMD/Logger error codes (PQS E006 DS01.2 Annex-1 "Error Codes").
+    # Codes are 1-7 chars; multiple active codes are space-separated (e.g.
+    # "COMM PWR").  EMD errors include the compressor diagnostic codes 1-7 plus
+    # the communication code; Logger errors cover sensor/battery/self-test faults.
+    EMD_ERROR_CODES = ("1", "2", "3", "4", "5", "6", "7", "COMM")
+    LOGGER_ERROR_CODES = ("COMM", "SENS", "BATT", "RTC", "MEM")
+
     def __init__(self, rng: random.Random):
         self.rng = rng
         self._last_power_loss: Optional[dt.datetime] = None
@@ -260,6 +267,16 @@ class AlarmGenerator:
         self._door_open_at_prev_end = open_at_end
         return triggered
 
+    def _pick_error_codes(self, codes) -> str:
+        """Pick one (usually) or two distinct pre-defined error codes.
+
+        Returns a space-separated string, per the Annex "Data Objects" format
+        for multiple simultaneous codes (e.g. "COMM PWR").
+        """
+        n = min(1 if self.rng.random() < 0.8 else 2, len(codes))
+        chosen = self.rng.sample(list(codes), n)
+        return ' '.join(chosen)
+
     def derive_alarms(
         self,
         tvc: float,
@@ -328,16 +345,16 @@ class AlarmGenerator:
             if power_elapsed >= self.POWR_THRESHOLD_S:
                 codes.append("POWR")
 
-        # EERR: random low-probability EMD error code
+        # EERR: low-probability EMD error code, drawn from the Annex set.
         eerr = None
         if self.rng.random() < 0.001:
-            eerr = ''.join(self.rng.choices('abcdefghijklmnopqrstuvwxyz', k=5))
+            eerr = self._pick_error_codes(self.EMD_ERROR_CODES)
 
-        # LERR: random low-probability logger error code, drawn independently
-        # of EERR -- logger and EMD errors are unrelated manufacturer codes.
+        # LERR: low-probability logger error code, drawn independently of EERR
+        # from the Annex set -- logger and EMD errors are unrelated conditions.
         lerr = None
         if self.rng.random() < 0.001:
-            lerr = ''.join(self.rng.choices('abcdefghijklmnopqrstuvwxyz', k=5))
+            lerr = self._pick_error_codes(self.LOGGER_ERROR_CODES)
 
         return {
             'ALRM': ' '.join(codes) if codes else None,

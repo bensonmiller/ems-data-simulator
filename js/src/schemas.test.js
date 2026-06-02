@@ -52,14 +52,15 @@ describe('TransferMetadata', () => {
     expect(json.schemaVersion).toBe('0.8.0');
     expect(json).toHaveProperty('transferredAt');
     expect(json).not.toHaveProperty('callbackUrl');
+    expect(json).not.toHaveProperty('transferCallbackUrl');
   });
 
-  it('includes callbackUrl when provided', () => {
+  it('includes transferCallbackUrl when provided', () => {
     const tm = new TransferMetadata({
       transferId: 'x',
-      callbackUrl: 'https://example.com/cb',
+      transferCallbackUrl: 'https://example.com/cb',
     });
-    expect(tm.toJSON().callbackUrl).toBe('https://example.com/cb');
+    expect(tm.toJSON().transferCallbackUrl).toBe('https://example.com/cb');
   });
 });
 

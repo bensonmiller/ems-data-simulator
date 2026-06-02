@@ -50,13 +50,16 @@ describe("MainsPowerModel.simulate_interval", () => {
     expect(Object.keys(readings).sort()).toEqual(["ACCD", "ACSV", "SVA"]);
   });
 
-  it("SVA equals nominal_voltage when no outage", () => {
-    const cfg = mainsConfig({ nominal_voltage: 600 });
+  it("SVA is in-bounds seconds (not voltage) when no outage", () => {
+    // SVA = number of in-bounds AC seconds in the period (full interval when
+    // powered, capped at 900), NOT the supply voltage.
+    const cfg = mainsConfig({ nominal_voltage: 230 });
     const model = new MainsPowerModel(cfg, new SeededRandom(42));
     let state = new PowerState();
     let readings;
     [state, readings] = model.simulate_interval(state, NOON, INTERVAL, 0.0);
-    expect(readings.SVA).toBe(600);
+    expect(readings.SVA).toBe(900);
+    expect(readings.SVA).toBeLessThanOrEqual(900);
   });
 
   it("ACCD is baseline current when compressor idle", () => {
@@ -135,7 +138,8 @@ describe("MainsPowerModel outage behavior", () => {
       0.0
     );
     expect(updatedState.in_outage).toBe(false);
-    expect(readings.SVA).toBe(model.config.nominal_voltage);
+    // SVA reflects the full in-bounds interval seconds (capped at 900).
+    expect(readings.SVA).toBe(900);
   });
 
   it("outage can start stochastically", () => {
@@ -292,14 +296,20 @@ describe("SolarPowerModel battery SOC", () => {
     );
   });
 
-  it("BLOG range", () => {
-    const model = new SolarPowerModel(solarConfig(), new SeededRandom(42));
+  it("BLOG is days-remaining, scaled from SOC (not voltage)", () => {
+    const cfg = solarConfig();
+    const model = new SolarPowerModel(cfg, new SeededRandom(42));
     for (const soc of [0.0, 0.5, 1.0]) {
       let state = new PowerState({ battery_soc: soc });
       let readings;
+      // simulate_interval updates SOC before deriving BLOG, so compare against
+      // the post-update SOC carried on the returned state.
       [state, readings] = model.simulate_interval(state, NOON, INTERVAL, 0.0);
-      expect(readings.BLOG).toBeGreaterThanOrEqual(10.0);
-      expect(readings.BLOG).toBeLessThanOrEqual(15.0);
+      const expected =
+        Math.round(state.battery_soc * cfg.blog_full_days * 10) / 10;
+      expect(readings.BLOG).toBeCloseTo(expected, 5);
+      expect(readings.BLOG).toBeGreaterThanOrEqual(0.0);
+      expect(readings.BLOG).toBeLessThanOrEqual(9999.9);
       expect(readings.BEMD).toBe(readings.BLOG);
     }
   });

@@ -65,7 +65,7 @@ export class TransferMetadata {
    * @param {Date}   [opts.transferredAt]
    * @param {'rtm'|'ems'} [opts.transferType='rtm']
    * @param {string} [opts.schemaVersion='0.8.0']
-   * @param {string|null} [opts.callbackUrl]
+   * @param {string|null} [opts.transferCallbackUrl]
    */
   constructor({
     transferId,
@@ -73,14 +73,14 @@ export class TransferMetadata {
     transferredAt = new Date(),
     transferType = 'rtm',
     schemaVersion = '0.8.0',
-    callbackUrl = null,
+    transferCallbackUrl = null,
   }) {
     this.transferId = transferId;
     this.transferSrc = transferSrc;
     this.transferredAt = transferredAt;
     this.transferType = transferType;
     this.schemaVersion = schemaVersion;
-    this.callbackUrl = callbackUrl;
+    this.transferCallbackUrl = transferCallbackUrl;
   }
 
   toJSON() {
@@ -93,8 +93,10 @@ export class TransferMetadata {
       transferType: this.transferType,
       schemaVersion: this.schemaVersion,
     };
-    if (this.callbackUrl != null) {
-      obj.callbackUrl = this.callbackUrl;
+    // cce-interop names this 'transferCallbackUrl' and types it as a
+    // non-nullable string, so emit the key only when a URL is present.
+    if (this.transferCallbackUrl != null) {
+      obj.transferCallbackUrl = this.transferCallbackUrl;
     }
     return obj;
   }

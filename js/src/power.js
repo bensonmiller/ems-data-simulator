@@ -87,19 +87,23 @@ export class MainsPowerModel {
   simulate_interval(state, timestamp, interval_s, compressor_runtime_s) {
     state = this._check_outage(state, timestamp, interval_s);
 
-    let sva, acsv, powered_s;
+    let acsv, powered_s;
     if (state.in_outage) {
-      sva = 0;
       acsv = 0.0;
       powered_s = 0.0;
     } else {
-      sva = this.config.nominal_voltage;
-      // Add small voltage variation
-      acsv = round1(sva + this.rng.gauss(0, sva * 0.02));
+      const nominal = this.config.nominal_voltage;
+      // ACSV is the average AC supply voltage; add small variation.
+      acsv = round1(nominal + this.rng.gauss(0, nominal * 0.02));
       powered_s = interval_s;
     }
 
     state.cumulative_powered_s += powered_s;
+
+    // SVA is the number of SECONDS within the (15-min) period that AC voltage
+    // was in-bounds: the full interval when powered, 0 during an outage.
+    // The interop schema bounds SVA to [0, 900].
+    const sva = Math.round(Math.min(900.0, powered_s));
 
     // ACCD is the AC current (amps) drawn by the appliance, modeled from the
     // compressor duty cycle: a small always-on baseline plus the running
@@ -215,17 +219,16 @@ export class SolarPowerModel {
       : 0.0;
     dccd = round2(Math.min(99.9, Math.max(0.0, dccd)));
 
-    // BLOG/BEMD: logger battery voltage mapped from SOC
-    const blog = round1(
-      this.config.blog_voltage_empty +
-        state.battery_soc * this.config.blog_voltage_range
-    );
+    // BLOG/BEMD: estimated DAYS of battery life remaining, scaled from the
+    // logger battery state of charge (schema range [0, 9999.9]).
+    const blog = round1(state.battery_soc * this.config.blog_full_days);
+    const bemd = round1(state.battery_soc * this.config.bemd_full_days);
 
     const readings = {
       DCSV: dcsv,
       DCCD: dccd,
       BLOG: blog,
-      BEMD: blog,
+      BEMD: bemd,
     };
     return [state, readings];
   }

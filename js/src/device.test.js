@@ -291,7 +291,9 @@ describe("transferMetadata", () => {
     expect(meta.transferSrc).toBe("org.nhgh");
     expect(meta.transferType).toBe("rtm");
     expect(meta.schemaVersion).toBe("0.8.0");
-    expect(meta.callbackUrl).toBeNull();
+    // transferCallbackUrl is omitted entirely when no webhook URL is supplied.
+    expect(meta).not.toHaveProperty("callbackUrl");
+    expect(meta).not.toHaveProperty("transferCallbackUrl");
     expect(meta.transferredAt).toBeInstanceOf(Date);
   });
 
