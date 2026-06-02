@@ -530,9 +530,9 @@ describe("Behavioral equivalence", () => {
 
 describe("Format equivalence", () => {
   describe("ABST format", () => {
-    it("matches emsDateTime format YYYYMMDDTHHMMSSz", () => {
+    it("matches emsDateTime format YYYYMMDDTHHMMSSZ", () => {
       const jsResult = runJS("mains_normal", 24);
-      const pattern = /^\d{8}T\d{6}z$/;
+      const pattern = /^\d{8}T\d{6}Z$/;
       for (let i = 0; i < jsResult.records.length; i++) {
         const abst = formatEmsDateTime(jsResult.records[i].ABST);
         expect(abst, `Record ${i}: ABST=${abst}`).toMatch(pattern);
@@ -542,7 +542,7 @@ describe("Format equivalence", () => {
     it("first record ABST matches start time", () => {
       const jsResult = runJS("mains_normal", 24);
       const abst = formatEmsDateTime(jsResult.records[0].ABST);
-      expect(abst).toBe("20240615T000000z");
+      expect(abst).toBe("20240615T000000Z");
     });
 
     it("records are spaced by the interval", () => {
@@ -583,7 +583,7 @@ describe("Format equivalence", () => {
       const rtmdRecords = jsResult.toRtmd();
       const json = rtmdRecords[0].toJSON();
       expect(typeof json.ABST).toBe("string");
-      expect(json.ABST).toMatch(/^\d{8}T\d{6}z$/);
+      expect(json.ABST).toMatch(/^\d{8}T\d{6}Z$/);
     });
   });
 
@@ -662,7 +662,7 @@ describe("Python fixture plausibility (sanity check)", () => {
 
       it("Python ABST format matches emsDateTime", () => {
         for (const rec of pyFixture.records) {
-          expect(rec.ABST).toMatch(/^\d{8}T\d{6}z$/);
+          expect(rec.ABST).toMatch(/^\d{8}T\d{6}Z$/);
         }
       });
     });

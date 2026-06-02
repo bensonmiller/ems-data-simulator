@@ -8,8 +8,12 @@
  */
 
 /**
- * Format a Date as an EMS datetime string: YYYYMMDDTHHMMSSz
- * (no dashes, no colons, lowercase z).
+ * Format a Date as an EMS datetime string: YYYYMMDDTHHMMSSZ
+ * (no dashes, no colons, trailing uppercase Z).
+ *
+ * The cce-interop ABST object is pattern-constrained to require a trailing
+ * uppercase 'Z' (^2[0-9]{7}T[0-2][0-9]{5}(\.[0-9]+)?Z$), matching the Python
+ * port's emsDateTime serializer. A lowercase 'z' fails schema validation.
  *
  * @param {Date} date
  * @returns {string}
@@ -21,7 +25,7 @@ export function formatEmsDateTime(date) {
   const h = String(date.getUTCHours()).padStart(2, '0');
   const mi = String(date.getUTCMinutes()).padStart(2, '0');
   const s = String(date.getUTCSeconds()).padStart(2, '0');
-  return `${y}${mo}${d}T${h}${mi}${s}z`;
+  return `${y}${mo}${d}T${h}${mi}${s}Z`;
 }
 
 /**

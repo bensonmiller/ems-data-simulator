@@ -31,8 +31,12 @@ LATITUDE = 12.0
 
 
 def format_ems_datetime(timestamp: dt.datetime) -> str:
-    """Match the JS formatEmsDateTime: YYYYMMDDTHHMMSSz (lowercase z)."""
-    return timestamp.strftime("%Y%m%dT%H%M%S") + "z"
+    """Match formatEmsDateTime / emsDateTime: YYYYMMDDTHHMMSSZ (uppercase Z).
+
+    The cce-interop ABST pattern requires a trailing uppercase 'Z'; a lowercase
+    'z' fails schema validation.
+    """
+    return timestamp.strftime("%Y%m%dT%H%M%S") + "Z"
 
 
 def record_to_dict(record: dict) -> dict:

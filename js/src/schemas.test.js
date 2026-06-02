@@ -19,22 +19,22 @@ import {
 describe('formatEmsDateTime', () => {
   it('formats a typical UTC date', () => {
     const d = new Date('2024-01-15T14:30:00Z');
-    expect(formatEmsDateTime(d)).toBe('20240115T143000z');
+    expect(formatEmsDateTime(d)).toBe('20240115T143000Z');
   });
 
   it('formats midnight on New Year', () => {
     const d = new Date('2025-01-01T00:00:00Z');
-    expect(formatEmsDateTime(d)).toBe('20250101T000000z');
+    expect(formatEmsDateTime(d)).toBe('20250101T000000Z');
   });
 
   it('formats end-of-year boundary', () => {
     const d = new Date('2024-12-31T23:59:59Z');
-    expect(formatEmsDateTime(d)).toBe('20241231T235959z');
+    expect(formatEmsDateTime(d)).toBe('20241231T235959Z');
   });
 
   it('zero-pads single-digit months and days', () => {
     const d = new Date('2024-03-05T09:07:03Z');
-    expect(formatEmsDateTime(d)).toBe('20240305T090703z');
+    expect(formatEmsDateTime(d)).toBe('20240305T090703Z');
   });
 });
 
@@ -91,7 +91,7 @@ describe('EmsRecordMains', () => {
 
   it('formats ABST with emsDateTime', () => {
     const rec = new EmsRecordMains(base);
-    expect(rec.toJSON().ABST).toBe('20240601T120000z');
+    expect(rec.toJSON().ABST).toBe('20240601T120000Z');
   });
 
   it('excludes undefined optional fields', () => {
@@ -205,7 +205,7 @@ describe('RtmdRecord', () => {
       TAMB: 30.5,
       TVC: 4.1,
     });
-    expect(rec.toJSON().ABST).toBe('20240601T120000z');
+    expect(rec.toJSON().ABST).toBe('20240601T120000Z');
   });
 });
 
@@ -264,7 +264,7 @@ describe('EmsReport', () => {
 
     // Records array
     expect(json.records).toHaveLength(1);
-    expect(json.records[0].ABST).toBe('20240601T120000z');
+    expect(json.records[0].ABST).toBe('20240601T120000Z');
     expect(json.records[0].ACCD).toBe(0.55);
 
     // Optional fields not set should be absent
@@ -302,7 +302,7 @@ describe('RtmdReport', () => {
     expect(json.CID).toBe('cid-002');
     expect(json.EDOP).toBe('2024-06-01');
     expect(json.records).toHaveLength(1);
-    expect(json.records[0].ABST).toBe('20240601T120000z');
+    expect(json.records[0].ABST).toBe('20240601T120000Z');
     expect(json).not.toHaveProperty('RNAM');
     expect(json).not.toHaveProperty('EXTRA');
   });
