@@ -160,6 +160,35 @@ During startup, each virtual user creates a `BaseRtmDevice`, pre-generates a que
 | `SIM_START` | `2024-06-15T00:00:00` | Simulated start date (ISO 8601) |
 | `START_JITTER_S` | `3600` | Max random offset per user's start time |
 
+### Delivery transport (CCE data delivery spec compliance)
+
+The POST is configurable to comply with the [CCE data delivery requirements](../WHO_PQS_E006_EMS_specifications/data_delivery/). All settings below default to spec-compliant, backward-compatible behavior — with none set, reports are sent as plain UTF-8 JSON with no authentication.
+
+| Environment variable | Default | Description |
+|---|---|---|
+| `CHARSET` | `utf-8` | Charset declared in the `Content-Type` header (§1.1/§1.2). Sent as `application/json; charset=<CHARSET>` |
+| `AUTH_HEADER` | `x-api-key` | Name of the header carrying the auth token (§1.3); configurable per employer |
+| `AUTH_SCHEME` | _(empty)_ | Optional scheme prefix for the token value (e.g. `Bearer`, `Basic`). Empty = bare token |
+| `AUTH_TOKEN` | _(unset)_ | The opaque auth token. **When unset, no auth header is sent** (auth disabled) |
+| `GZIP` | _(off)_ | When truthy (`1`/`true`/`yes`/`on`), gzip-compress the request body as raw binary and set `Content-Encoding: gzip` (§1.6). Body size is checked against the 1 MB post-compression cap (§1.4) |
+
+Authentication covers all three shapes the spec allows (plus standard Bearer) from one mechanism:
+
+```bash
+# API-key in a named header (spec §1.3 default)
+AUTH_HEADER=x-api-key AUTH_TOKEN=<key>            # -> x-api-key: <key>
+
+# Bearer token (e.g. OAuth-protected employer endpoint)
+AUTH_HEADER=Authorization AUTH_SCHEME=Bearer AUTH_TOKEN=<token>
+                                                 # -> Authorization: Bearer <token>
+
+# HTTP Basic auth (spec §1.3)
+AUTH_HEADER=Authorization AUTH_SCHEME=Basic AUTH_TOKEN=<base64(user:pass)>
+                                                 # -> Authorization: Basic <b64>
+```
+
+> **Note:** gzip bodies are sent as raw binary and are never additionally Base64-encoded, per §1.6.
+
 ### Examples
 
 ```bash
@@ -173,6 +202,11 @@ NUM_REPORTS=720 locust -f locustfile.py --headless -u 50 -r 10
 # Remote endpoint with custom start date
 TARGET_HOST=https://ingest.example.org SIM_START=2025-01-01T00:00:00 \
   locust -f locustfile.py --headless -u 500 -r 20
+
+# Spec-compliant delivery: Bearer auth + gzip-compressed bodies
+TARGET_HOST=https://ingest.example.org INGEST_PATH=/v1/cce \
+  AUTH_HEADER=Authorization AUTH_SCHEME=Bearer AUTH_TOKEN=$MY_TOKEN GZIP=true \
+  locust -f locustfile.py --headless -u 100 -r 5
 ```
 
 ## Adding a new power type

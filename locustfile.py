@@ -1,3 +1,5 @@
+import gzip as gzip_codec
+import json
 from collections import deque
 from datetime import datetime, timedelta
 from random import uniform
@@ -27,6 +29,41 @@ START_JITTER_S = int(environ.get('START_JITTER_S', 3600))
 # Path on TARGET_HOST that reports are POSTed to (the ingestion endpoint).
 # Override to match whatever ingestion service you point at.
 INGEST_PATH = environ.get('INGEST_PATH', '/')
+
+# --- Delivery transport (CCE data delivery spec) --------------------------
+# Character encoding declared in the Content-Type header (spec §1.1/§1.2:
+# UTF-8 JSON, charset must be stated). Default utf-8; override per employer.
+CHARSET = environ.get('CHARSET', 'utf-8')
+CONTENT_TYPE = f'application/json; charset={CHARSET}'
+
+# Authentication (spec §1.3). Token placed in an employer-named header.
+# AUTH_HEADER  — header name (default x-api-key; e.g. Authorization for Bearer/Basic)
+# AUTH_SCHEME  — optional scheme prefix (e.g. Bearer, Basic); empty = bare token
+# AUTH_TOKEN   — the opaque secret; unset = no auth header sent (auth disabled)
+AUTH_HEADER = environ.get('AUTH_HEADER', 'x-api-key')
+AUTH_SCHEME = environ.get('AUTH_SCHEME', '')
+AUTH_TOKEN = environ.get('AUTH_TOKEN')
+
+# Gzip request body (spec §1.6: optional, raw binary, never base64-wrapped).
+GZIP = environ.get('GZIP', '').strip().lower() in ('1', 'true', 'yes', 'on')
+
+# Spec §1.4: request body capped at 1MB, measured after content-encoding.
+MAX_BODY_BYTES = 1024 * 1024
+
+
+def build_request_headers():
+    """Static request headers — auth + content metadata are constant per run."""
+    headers = {'Content-Type': CONTENT_TYPE}
+    if AUTH_TOKEN:
+        headers[AUTH_HEADER] = (
+            f'{AUTH_SCHEME} {AUTH_TOKEN}'.strip() if AUTH_SCHEME else AUTH_TOKEN
+        )
+    if GZIP:
+        headers['Content-Encoding'] = 'gzip'
+    return headers
+
+
+REQUEST_HEADERS = build_request_headers()
 
 
 class CceDevice(HttpUser):
@@ -94,7 +131,20 @@ class CceDevice(HttpUser):
             meta=TransferMetadata(**md),
         )
         body = tx.model_dump(mode='json', exclude_unset=True)
-        self.client.post(INGEST_PATH, json=body)
+
+        # Serialize to the declared charset, then optionally gzip. Sent as raw
+        # bytes (data=) so Content-Type/charset, auth, and Content-Encoding from
+        # REQUEST_HEADERS all apply — the json= kwarg would override them.
+        payload = json.dumps(body).encode(CHARSET)
+        if GZIP:
+            payload = gzip_codec.compress(payload)  # raw binary, no base64 (§1.6)
+        if len(payload) > MAX_BODY_BYTES:
+            print(
+                f'[WARN] request body {len(payload)} bytes exceeds the '
+                f'{MAX_BODY_BYTES}-byte (1MB) §1.4 cap'
+            )
+
+        self.client.post(INGEST_PATH, data=payload, headers=REQUEST_HEADERS)
 
 
 # ---------------------------------------------------------------------------
